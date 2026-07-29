@@ -1,5 +1,5 @@
 import json
-from fastapi import FastAPi
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from core.config import settings
 
@@ -8,7 +8,7 @@ class UTF8JSONResponse(JSONResponse):
         return json.dumps(content, ensure_ascii=False).encode("utf-8")
 
 
-app = FastAPi(
+app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     docs_url="/docs",
@@ -19,5 +19,6 @@ app = FastAPi(
 @app.get("/health")
 def healthServer():
     return {
+        "status" :  True ,
         "message" :  "Server is runing"
     }
