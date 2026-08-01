@@ -6,7 +6,7 @@ from app.modules.users.schemas import UserCreate , UserUpdate
 from app.modules.base import CRUDBase
 
 
-user = CRUDBase[User ,  UserCreate , UserUpdate](User)
+user_service = CRUDBase[User ,  UserCreate , UserUpdate](User)
 
 async def get_by_email(db: AsyncSession ,  email_address: str) ->  User | None:
     result = await db.execute(select(User).where(User.email == email_address))
