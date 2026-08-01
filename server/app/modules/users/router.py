@@ -1,11 +1,11 @@
 from http.client import HTTPException
 
 from fastapi import APIRouter ,  Depends , status
-from app.modules.users.service import user as crud, get_by_email
+from app.modules.users.service import user_service as crud, get_by_email
 from server.app.modules.users.schemas import UserCreate , ResponseUser , UserUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
-router = APIRouter()
+router = APIRouter(prefix="/users", tags=["Users"])
 
 @router.get("/" ,  response_model=list[ResponseUser])
 async def get_user(db: AsyncSession = Depends(get_session), skip: int = 0, limit: int = 100):
