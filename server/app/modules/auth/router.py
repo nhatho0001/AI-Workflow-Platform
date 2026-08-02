@@ -5,7 +5,7 @@ from jose import JWTError
 from schemes import LoginRequest
 from app.modules.users.schemas import UserBase , UserCreate
 from app.modules.users.service import get_by_email , user_service
-from server.app.core.database import get_session
+from app.core.database import get_session
 from utils import create_access_token, create_refresh_token, decode_token, get_password_hash,  authenticate_user
 from schemes import TokenResponse , RefreshRequest
 from sqlalchemy.ext.asyncio import AsyncSession
