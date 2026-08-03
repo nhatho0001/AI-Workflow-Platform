@@ -8,3 +8,5 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str = Field(..., description="The access token for the user")
     refresh_token: str = Field(..., description="The refresh token for the user")
+
+    model_config = {"from_attributes": True}

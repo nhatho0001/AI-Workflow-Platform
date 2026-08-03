@@ -49,5 +49,6 @@ async def get_current_admin(
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+DBSession = Annotated[AsyncSession ,  Depends(get_session)]
 CurrentUser  = Annotated[User, Depends(get_current_active_user)]
 AdminUser    = Annotated[User, Depends(get_current_admin)]

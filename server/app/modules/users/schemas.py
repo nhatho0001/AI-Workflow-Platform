@@ -1,23 +1,27 @@
 import uuid
 from pydantic import BaseModel , EmailStr
+from app.modules.users.models import Status , Role
 
 class UserBase(BaseModel):
     name: str
     email: EmailStr
-    role: str = "seller"
+    role: Role = Role.User
+    status: Status = Status.Active
+    avatar_url: str | None = None
 
 
 class UserCreate(UserBase):
     password: str
+    avatar_url: str | None = None
+    
 
 
 class UserUpdate(UserBase):
     password: str | None = None
-    status: str | None = None
 
 class ResponseUser(UserBase):
     id: uuid.UUID
-    status: str
+    model_config = {"from_attributes": True}
 
 
 class LoginRequest(BaseModel):
