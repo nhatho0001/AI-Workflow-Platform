@@ -10,3 +10,10 @@ class TokenResponse(BaseModel):
     refresh_token: str = Field(..., description="The refresh token for the user")
 
     model_config = {"from_attributes": True}
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="The refresh token for the user")
+
+class CreateRefreshToken(BaseModel):
+    user_id: str = Field(..., description="The ID of the user")
+    token_hash: str = Field(..., description="The hash of the refresh token")

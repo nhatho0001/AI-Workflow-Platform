@@ -12,7 +12,6 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    avatar_url: str | None = None
     
 
 

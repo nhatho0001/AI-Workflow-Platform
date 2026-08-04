@@ -60,7 +60,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
             The encoded JWT token as a string.
     """
     to_encode = data.copy()
-    to_encode["token_type"] = "access token"
+    to_encode["token_type"] = "access_token"
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})          # claim "exp" — JWT tự reject khi hết hạn
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -77,7 +77,7 @@ def create_refresh_token(data: dict[str, Any], expires_delta: timedelta | None =
             The encoded JWT refresh token as a string.
     """
     to_encode = data.copy()
-    to_encode["token_type"] = "refresh token"
+    to_encode["token_type"] = "refresh_token"
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.JWT_REFRESH_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})          # claim "exp" — JWT tự reject khi hết hạn
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
