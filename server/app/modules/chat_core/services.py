@@ -3,6 +3,7 @@ from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 from uuid import UUID
+from fastapi import HTTPException
 import math
 
 from app.modules.chat_core.models import Conversation, Message, Attachment, RoleEnum
@@ -15,7 +16,6 @@ from app.modules.chat_core.schemas import (
     PaginatedConversations,
     PaginatedMessages,
 )
-from app.core.exceptions import NotFoundException, ForbiddenException
 
 
 # ═══════════════════════════════════════════════════════════
@@ -59,9 +59,9 @@ class ConversationService:
         conversation = result.scalar_one_or_none()
 
         if not conversation:
-            raise NotFoundException(f"Conversation {conversation_id} not found")
+            raise HTTPException(status_code=404, detail="Conversation not found")
         if conversation.user_id != user_id:
-            raise ForbiddenException("Access denied")
+            raise HTTPException(status_code=403, detail="Access denied")
 
         return conversation
 
@@ -83,9 +83,9 @@ class ConversationService:
         conversation = result.scalar_one_or_none()
 
         if not conversation:
-            raise NotFoundException(f"Conversation {conversation_id} not found")
+            raise HTTPException(status_code=404, detail=f"Conversation {conversation_id} not found")
         if conversation.user_id != user_id:
-            raise ForbiddenException("Access denied")
+            raise HTTPException(status_code=403, detail="Access denied")
 
         return conversation
 
@@ -234,7 +234,7 @@ class MessageService:
         )
         message = result.scalar_one_or_none()
         if not message:
-            raise NotFoundException(f"Message {message_id} not found")
+            raise HTTPException(status_code=404, detail=f"Message {message_id} not found")
         return message
 
     # ── List by conversation (paginated) ───────────────────
@@ -373,7 +373,7 @@ class AttachmentService:
         )
         attachment = result.scalar_one_or_none()
         if not attachment:
-            raise NotFoundException(f"Attachment {attachment_id} not found")
+            raise HTTPException(status_code=404, detail=f"Attachment {attachment_id} not found")
         await db.delete(attachment)
         await db.commit()
 
