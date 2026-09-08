@@ -1,8 +1,8 @@
 import json
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from core.config import settings
-from router import api_router
+from app.core.config import settings
+from app.router import api_router
 
 class UTF8JSONResponse(JSONResponse):
     def render(self, content) -> bytes:

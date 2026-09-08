@@ -5,10 +5,10 @@ from typing import Optional, AsyncGenerator
 from uuid import UUID
 import json
 
-from app.core.database import get_db
+from app.core.database import get_session
 from app.core.dependencies import get_current_user
 from app.core.exceptions import NotFoundException, ForbiddenException
-from app.modules.auth.models import User
+from app.modules.users.models import User
 from app.modules.chat_core.schemas import (
     # Conversation
     ConversationCreate,
@@ -38,7 +38,7 @@ from app.modules.chat_core.services import (
 # Router setup
 # ─────────────────────────────────────────────────────────────────────
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(tags=["Chat"])
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ async def list_conversations(
     page_size: int = Query(20, ge=1, le=100),
     is_archived: bool = Query(False),
     folder_id: Optional[UUID] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     return await ConversationService.list_by_user(
@@ -88,7 +88,7 @@ async def list_conversations(
 )
 async def create_conversation(
     payload: ConversationCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     return await ConversationService.create(
@@ -105,7 +105,7 @@ async def create_conversation(
 )
 async def get_conversation(
     conversation_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -121,7 +121,7 @@ async def get_conversation(
 )
 async def get_conversation_with_messages(
     conversation_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -140,7 +140,7 @@ async def get_conversation_with_messages(
 async def update_conversation(
     conversation_id: UUID,
     payload: ConversationUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -158,7 +158,7 @@ async def update_conversation(
 )
 async def toggle_archive(
     conversation_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -176,7 +176,7 @@ async def toggle_archive(
 )
 async def toggle_pin(
     conversation_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -194,7 +194,7 @@ async def toggle_pin(
 )
 async def delete_conversation(
     conversation_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -214,7 +214,7 @@ async def delete_conversation(
 )
 async def start_chat(
     payload: ChatRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -275,7 +275,7 @@ async def start_chat(
 async def send_message(
     conversation_id: UUID,
     payload: ChatMessageInput,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -345,7 +345,7 @@ async def list_messages(
     conversation_id: UUID,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     # Verify ownership trước khi trả messages
@@ -369,7 +369,7 @@ async def list_messages(
 )
 async def get_message(
     message_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -385,7 +385,7 @@ async def get_message(
 )
 async def get_message_thread(
     message_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -402,7 +402,7 @@ async def get_message_thread(
 async def update_message(
     message_id: UUID,
     payload: MessageUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -418,7 +418,7 @@ async def update_message(
 )
 async def delete_message(
     message_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -440,7 +440,7 @@ async def delete_message(
 async def upload_attachment(
     message_id: UUID,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -477,7 +477,7 @@ async def upload_attachment(
 )
 async def list_attachments(
     message_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:
@@ -495,7 +495,7 @@ async def list_attachments(
 )
 async def delete_attachment(
     attachment_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     try:

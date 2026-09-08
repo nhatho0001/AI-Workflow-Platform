@@ -10,6 +10,6 @@ class RefreshToken(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id") , primary_key=True)
-    token_hash: Mapped[str] = mapped_column(String(255) , nullable=False , primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(255) , nullable=False)
     __table_args__ = (UniqueConstraint('user_id', 'token_hash', name='uq_user_token'),)
     

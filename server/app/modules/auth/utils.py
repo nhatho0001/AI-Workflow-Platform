@@ -1,4 +1,5 @@
 from pwdlib import PasswordHash
+import hashlib
 from app.core.config import settings
 from passlib.context import CryptContext
 from app.modules.users.service import get_by_email
@@ -23,6 +24,31 @@ def get_password_hash(password: str) -> str:
         The hashed password as a string.
     """
     return pwd_context.hash(password)
+
+def sha256(text : str) -> str:
+    """
+    Hashes a text using SHA-256.
+
+    Args:
+        text: The text to be hashed.
+
+    Returns:
+        The hashed text as a string.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def verify_sha256(text: str, hashed_text: str) -> bool:
+    """
+    Verifies a text against a SHA-256 hashed text.
+
+    Args:
+        text: The plain text to verify.
+        hashed_text: The SHA-256 hashed text to compare against.
+
+    Returns:
+        True if the texts match, False otherwise.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() == hashed_text
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
