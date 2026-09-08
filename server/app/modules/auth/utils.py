@@ -1,4 +1,5 @@
 from pwdlib import PasswordHash
+import hashlib
 from app.core.config import settings
 from passlib.context import CryptContext
 from app.modules.users.service import get_by_email
@@ -23,6 +24,31 @@ def get_password_hash(password: str) -> str:
         The hashed password as a string.
     """
     return pwd_context.hash(password)
+
+def sha256(text : str) -> str:
+    """
+    Hashes a text using SHA-256.
+
+    Args:
+        text: The text to be hashed.
+
+    Returns:
+        The hashed text as a string.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def verify_sha256(text: str, hashed_text: str) -> bool:
+    """
+    Verifies a text against a SHA-256 hashed text.
+
+    Args:
+        text: The plain text to verify.
+        hashed_text: The SHA-256 hashed text to compare against.
+
+    Returns:
+        True if the texts match, False otherwise.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() == hashed_text
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
@@ -60,7 +86,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
             The encoded JWT token as a string.
     """
     to_encode = data.copy()
-    to_encode["token_type"] = "access token"
+    to_encode["token_type"] = "access_token"
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})          # claim "exp" — JWT tự reject khi hết hạn
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -77,7 +103,7 @@ def create_refresh_token(data: dict[str, Any], expires_delta: timedelta | None =
             The encoded JWT refresh token as a string.
     """
     to_encode = data.copy()
-    to_encode["token_type"] = "refresh token"
+    to_encode["token_type"] = "refresh_token"
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.JWT_REFRESH_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})          # claim "exp" — JWT tự reject khi hết hạn
     return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
