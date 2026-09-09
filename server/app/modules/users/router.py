@@ -1,6 +1,4 @@
-from http.client import HTTPException
-
-from fastapi import APIRouter ,  Depends , status
+from fastapi import APIRouter ,  Depends , status , HTTPException
 from app.modules.users.service import user_service as crud, get_by_email
 from app.modules.users.schemas import UserCreate , ResponseUser , UserUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,12 +30,15 @@ async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_sessio
 
 @router.patch("/update/{user_id}"  ,response_model=ResponseUser , status_code=200)
 async def update_user(user_id: int, user_in: UserUpdate, db: DBSession ,  current_user:  CurrentUser):
+    user = await crud.get(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     email_user = await get_by_email(db, user_in.email)
-    if email_user and email_user.id != user_in.id:
+    if email_user and email_user.id != user.id:
         raise HTTPException(status_code=400, detail="Email already registered")
-    if user_id != current_user.id and current_user.role != "admin" :
+    if user.id != current_user.id and current_user.role != "admin" :
         raise HTTPException(status_code = 403 ,  detail = "Forbiden!")
-    return await crud.update(db, db_obj=current_user, obj_in=user_in)
+    return await crud.update(db, db_obj=user, obj_in=user_in)
 
 @router.delete("/delete/{user_id}" ,  status_code=204)
 async def delete_user(user_id: int, db: DBSession ,  current_user: CurrentUser):
