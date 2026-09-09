@@ -2,6 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+<<<<<<< HEAD
 ## Project overview
 
 AI Workflow Platform is an open-source Python/FastAPI backend for building AI Agents and multi-step AI Workflows for businesses (in spirit similar to Microsoft Copilot Studio, n8n AI, or LangGraph Platform). It's also an explicit learning project pairing **AI Engineering** (LLM integration, RAG, tool calling, multi-agent, MCP) with **Backend Engineering** (FastAPI, async SQLAlchemy, PostgreSQL, Celery, clean architecture) — see `README.md` (in Vietnamese) for the full vision and roadmap.
@@ -64,3 +65,68 @@ The codebase is early-stage with some real rough edges — worth knowing so you 
 - **`server/Dockerfile` is stale.** It `COPY requirements.txt` and `pip install`s from it, but the project has no `requirements.txt` — dependencies are managed via `uv` (`pyproject.toml` + `uv.lock`). The Dockerfile will fail to build as-is.
 - **`server/.env` is present but empty**, and there's no `.env.example`. Required vars (all non-optional, per `core/config.py`): `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, `SECRET_KEY`. Optional: `APP_NAME`, `APP_VERSION`, `DEBUG`, `CORS_ORIGINS`.
 - **No migrations.** `server/alembic/` exists but is empty (no `env.py`/versions) — the DB schema currently exists only as SQLAlchemy model definitions, not as tracked migrations.
+=======
+## Project Overview
+
+AI Workflow Platform is an early-stage, open-source backend for building AI Agents and AI Workflows (in the spirit of Copilot Studio / n8n AI / LangGraph Platform). Only the FastAPI backend exists so far, under `server/`; there is no frontend in this repo yet. Code comments, docstrings, and commit messages are frequently in Vietnamese — match that when editing existing files.
+
+Per the README, the long-term scope includes multi-LLM support, tool/function calling, RAG, multi-agent workflows, MCP integration, and a drag-and-drop workflow engine. The current codebase only implements user auth, user management, and a chat/conversation data layer — treat everything else in the README as roadmap, not existing code.
+
+## Commands
+
+All commands run from `server/`. Dependencies are managed with `uv` (`uv.lock` is checked in).
+
+```bash
+cd server
+uv sync                                              # install dependencies into .venv
+uv run uvicorn app.main:app --reload --port 8000     # run dev server (see Import convention below)
+```
+
+There is no `.env.example`; `app/core/config.py` requires these env vars (no defaults) to construct `Settings`, so the app cannot start without them: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, `SECRET_KEY`.
+
+Docker: `server/Dockerfile` is a two-stage build that expects a `requirements.txt` (not currently present — the project uses `pyproject.toml`/`uv.lock` instead) and runs `uvicorn app.main:app` from `/app` (i.e. from `server/`). There is no `docker-compose.yml`, no Alembic/migrations setup, and no test suite yet — these are absent, not just unmentioned.
+
+## Architecture
+
+Single FastAPI service under `server/app/`, organized by domain module rather than by technical layer:
+
+```
+app/
+├── main.py            # FastAPI() app, UTF8 JSON response, /health
+├── router.py           # aggregates module routers under /api/v1
+├── core/
+│   ├── config.py        # pydantic-settings Settings (env-driven)
+│   ├── database.py       # async engine, AsyncSessionLocal, declarative Base, get_session
+│   ├── dependencies.py     # get_current_user / get_current_active_user / get_current_admin
+│   │                        # + typed aliases DBSession, CurrentUser, AdminUser
+│   └── exceptions.py       # NotFoundException, ForbiddenException (HTTPException subclasses)
+└── modules/
+    ├── base.py           # generic CRUDBase[ModelT, CreateSchemaT, UpdateSchemaT]
+    ├── auth/             # login/register/refresh/logout, JWT issuance, refresh_tokens table
+    ├── users/             # User model/schemas/service/router
+    └── chat_core/          # Conversation/Message/Attachment models + service + router (SSE chat)
+```
+
+Each domain module follows the same internal shape: `models.py` (SQLAlchemy `Mapped[...]` ORM classes), `schemas.py` (Pydantic request/response models), `service(s).py` (DB access / business logic), `router.py` (FastAPI `APIRouter`). Read a module's `models.py` before its `router.py` — schemas and services are typed against the ORM models, not the other way around.
+
+`modules/base.py`'s `CRUDBase` is the shared generic repository: instantiated once per model as a module-level singleton, e.g. `user_service = CRUDBase[User, UserCreate, UserUpdate](User)` in `modules/users/service.py`, then imported wherever that model's CRUD is needed. Prefer extending/reusing this pattern for new modules over hand-rolling repetitive CRUD.
+
+`app/router.py` mounts module routers under `/api/v1`. Auth is enforced per-router, not globally: `auth_router` is public; `user_router` is built with `APIRouter(dependencies=[Depends(get_current_user)])` so every route on it requires a valid JWT. Route handlers pull the current user via the `CurrentUser`/`AdminUser`/`DBSession` `Annotated` aliases from `core/dependencies.py` rather than repeating `Depends(...)` in every signature.
+
+Auth uses JWT access + refresh tokens (`python-jose`), with refresh tokens persisted **hashed** (via `passlib`/bcrypt) in the `refresh_tokens` table and looked up by scanning a user's tokens and verifying the hash (`modules/auth/services.py:get_refresh_token_by_hash_token`) rather than by a direct hash lookup.
+
+All DB access is async SQLAlchemy 2.0 style (`AsyncSession`, `Mapped[...]`/`mapped_column`, `select(...)` + `await db.execute(...)`) — keep new code on this style rather than the legacy `Column(...)` declarative style that still appears in a few older model files.
+
+### Import convention
+
+Most modules use fully-qualified imports rooted at `app` (e.g. `from app.core.config import settings`, `from app.modules.users.models import User`) — this matches how the Dockerfile runs the app (`uvicorn app.main:app` from `server/`). A few files predate this convention and use bare imports instead (`app/main.py`: `from core.config import settings`; `app/router.py`: `from modules.auth.router import ...`; parts of `modules/auth/router.py` and `modules/auth/services.py`: `from schemes import ...`, `from utils import ...`). When touching these files, match the `app.`-prefixed convention used by the rest of the codebase rather than the bare-import style, and expect `ImportError`s from the stale files until they're aligned.
+
+### Known inconsistencies to check before relying on code here
+
+The codebase is under active early development; some cross-references don't currently resolve. Verify rather than assume when working nearby:
+
+- `core/config.py`'s `Settings` has no `DATABASE_URL` field, but `core/database.py` reads `settings.DATABASE_URL`; it also has no `JWT_REFRESH_TOKEN_EXPIRE_MINUTES`, but `modules/auth/utils.py:create_refresh_token` reads it.
+- `modules/auth/services.py` imports `BaseService` from `modules/base.py`, which only defines `CRUDBase`.
+- `chat_core`'s router imports `get_db` from `core.database` (only `get_session` exists there) and `User` from `modules.auth.models` (it actually lives in `modules.users.models`); its router also isn't included in `app/router.py`, so `/chat/*` endpoints aren't currently mounted.
+- `modules/users/models.py` defines `User.id` as an `Integer` primary key, but `modules/users/schemas.py:ResponseUser.id` is typed `uuid.UUID` and some auth code paths convert `user_id` via `uuid.UUID(...)`.
+>>>>>>> c72dfd0 (update error logic code)

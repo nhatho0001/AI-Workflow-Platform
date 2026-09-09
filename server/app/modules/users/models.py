@@ -3,12 +3,12 @@ from sqlalchemy import Column, Integer, String , Enum , DateTime ,  func
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
 
-class Status(enum.Enum):
+class Status(enum.Enum ,  str):
     Active =  "active"
     Inactive = "inactive" 
     Pending =  "pending"
 
-class Role(enum.Enum):
+class Role(enum.Enum ,  str):
     Admin = "admin"
     Seller = "seller"
     Buyer = "buyer"
