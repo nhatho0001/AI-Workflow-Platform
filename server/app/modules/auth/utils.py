@@ -1,4 +1,3 @@
-from pwdlib import PasswordHash
 import hashlib
 from app.core.config import settings
 from passlib.context import CryptContext
@@ -8,7 +7,7 @@ from app.modules.users.models import User
 from app.modules.users.schemas import UserCreate, UserUpdate , UserBase
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
-from schemes import LoginRequest ,  TokenResponse
+from app.modules.auth.schemes import LoginRequest ,  TokenResponse
 from typing import Any, Literal
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

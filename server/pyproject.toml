@@ -5,9 +5,17 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.140.13",
     "passlib>=1.7.4",
-    "pwdlib[argon2]>=0.3.0",
-    "pydantic>=2.13.4",
-    "pyjwt>=2.13.0",
+    "pydantic[email]>=2.13.4",
+    "pydantic-settings>=2.15.0",
     "python-jose[cryptography]>=3.5.0",
     "sqlalchemy>=2.0.51",
+    "uvicorn[standard]>=0.52.4",
+    "asyncpg>=0.31.0",
+    "bcrypt>=4.0,<4.1",
+    "python-multipart>=0.0.32",
+]
+
+[dependency-groups]
+dev = [
+    "alembic>=1.19.2",
 ]

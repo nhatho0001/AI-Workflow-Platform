@@ -1,5 +1,5 @@
 from app.core.database import Base
-from sqlalchemy import Column, String, Enum , ForeignKey , DateTime, func , JSON
+from sqlalchemy import Column, String, Enum as SAEnum , ForeignKey , DateTime, func , JSON
 from sqlalchemy.orm import relationship , Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 from enum import Enum
@@ -33,12 +33,12 @@ class Message(Base):
     id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=False)
     parent_message_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id"), nullable=True)
-    role : Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), nullable=False)
+    role : Mapped[RoleEnum] = mapped_column(SAEnum(RoleEnum), nullable=False)
     content : Mapped[str] = mapped_column(String(2000), nullable=False)
     token_count : Mapped[int] = mapped_column(nullable=False, default=0)
     model_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("models.id"), nullable=True)
     finish_reason : Mapped[str] = mapped_column(String(255), nullable=True)
-    metadata : Mapped[dict] = mapped_column(JSON, nullable=True)
+    meta : Mapped[dict] = mapped_column("metadata" ,JSON, nullable=True)
     created_at : Mapped[DateTime] = mapped_column(nullable=False, server_default=func.now())
 
 class Attachment(Base):

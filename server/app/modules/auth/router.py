@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import uuid
 from fastapi import APIRouter, Depends, HTTPException , status
 from jose import JWTError
-from schemes import CreateRefreshToken, LoginRequest
+from app.modules.auth.schemes import CreateRefreshToken, LoginRequest
 from app.modules.users.schemas import UserBase , UserCreate
 from app.modules.users.service import get_by_email , user_service
 from app.core.database import get_session
