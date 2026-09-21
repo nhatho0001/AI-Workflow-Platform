@@ -1,8 +1,10 @@
+import uuid
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.modules.users.models import User
+from app.modules.users.models import Status, User
 from app.modules.auth.utils import decode_token
 from app.modules.users.service import user_service
 from app.core.database import get_session
@@ -26,10 +28,11 @@ async def get_current_user(
             raise credentials_exception
         if payload.get("token_type") != "access_token":
             raise credentials_exception
-    except JWTError:
+        user_uuid = uuid.UUID(user_id)
+    except (JWTError, ValueError):
         raise credentials_exception
 
-    user = await user_service.get(db, int(user_id))
+    user = await user_service.get(db, user_uuid)
     if user is None:
         raise credentials_exception
     return user
@@ -37,7 +40,7 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    if not current_user.is_active:
+    if current_user.status != Status.Active:
         raise HTTPException(status_code=403, detail="Inactive user")
     return current_user
 

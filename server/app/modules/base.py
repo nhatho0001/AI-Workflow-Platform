@@ -1,18 +1,21 @@
+import uuid
 from typing import Generic, TypeVar, Type, Sequence
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from fastapi import HTTPException
 
 from app.core.database import Base
 
 ModelT =  TypeVar("ModelT" , bound= Base)
 CreateSchemaT = TypeVar("CreateSchemaT" ,  bound =  BaseModel)
-UpdateSchemaT = TypeVar("updateSchemaT" ,  bound =  BaseModel)
+UpdateSchemaT = TypeVar("UpdateSchemaT" ,  bound =  BaseModel)
 class CRUDBase(Generic[ModelT ,  CreateSchemaT ,  UpdateSchemaT]):
     def __init__(self , model : Type[ModelT]):
-        self.model =  model 
+        self.model =  model
 
-    async def get( self , db : AsyncSession , id :  str ) -> ModelT | None :
+    async def get( self , db : AsyncSession , id :  uuid.UUID | int | str ) -> ModelT | None :
         return await db.get(self.model , id)
 
     async def get_multi(self ,  db : AsyncSession , skip : int = 0 , limit : int = 100) -> Sequence[ModelT] :
@@ -22,7 +25,11 @@ class CRUDBase(Generic[ModelT ,  CreateSchemaT ,  UpdateSchemaT]):
     async def create(self, db: AsyncSession, *, obj_in: CreateSchemaT) -> ModelT:
         db_obj = self.model(**obj_in.model_dump())
         db.add(db_obj)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail="Conflict with existing data")
         await db.refresh(db_obj)
         return db_obj
 
@@ -32,13 +39,21 @@ class CRUDBase(Generic[ModelT ,  CreateSchemaT ,  UpdateSchemaT]):
         update_data = obj_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_obj, field, value)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail="Conflict with existing data")
         await db.refresh(db_obj)
         return db_obj
 
-    async def remove(self, db: AsyncSession, *, id: int) -> ModelT | None:
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID | int | str) -> ModelT | None:
         obj = await self.get(db, id)
         if obj:
             await db.delete(obj)
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                raise HTTPException(status_code=409, detail="Cannot delete: referenced by other data")
         return obj

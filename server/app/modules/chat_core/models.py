@@ -1,7 +1,8 @@
 from app.core.database import Base
-from sqlalchemy import Column, String, Enum as SAEnum , ForeignKey , DateTime, func , JSON
+from sqlalchemy import String, Enum as SAEnum , ForeignKey , func , JSON
 from sqlalchemy.orm import relationship , Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime
 from enum import Enum
 import uuid
 
@@ -16,38 +17,51 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    model_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("models.id"), nullable=False)
-    folder_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
+    user_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # model_id/folder_id: chưa có bảng catalog "models"/"folders" trong codebase (ngoài phạm vi Phase 1) —
+    # giữ làm cột UUID thường, không ràng buộc FK, để không chặn migration/tạo bảng.
+    model_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    folder_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
     title : Mapped[str] = mapped_column(String(255), nullable=True)
     system_prompt : Mapped[str] = mapped_column(String(1000), nullable=True)
     temperature : Mapped[float] = mapped_column(nullable=True, default=0.7)
     is_archived : Mapped[bool] = mapped_column(nullable=False, default=False)
     is_pinned : Mapped[bool] = mapped_column(nullable=False, default=False)
-    created_at : Mapped[DateTime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at : Mapped[DateTime] = mapped_column(nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at : Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+    updated_at : Mapped[datetime] = mapped_column(nullable=False, server_default=func.now(), onupdate=func.now())
+
+    messages: Mapped[list["Message"]] = relationship(
+        "Message", back_populates="conversation", cascade="all, delete-orphan"
+    )
 
 class Message(Base):
     __tablename__ = "messages"
 
     id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    conversation_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=False)
-    parent_message_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id"), nullable=True)
+    conversation_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    parent_message_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
     role : Mapped[RoleEnum] = mapped_column(SAEnum(RoleEnum), nullable=False)
     content : Mapped[str] = mapped_column(String(2000), nullable=False)
     token_count : Mapped[int] = mapped_column(nullable=False, default=0)
-    model_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("models.id"), nullable=True)
+    model_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
     finish_reason : Mapped[str] = mapped_column(String(255), nullable=True)
     meta : Mapped[dict] = mapped_column("metadata" ,JSON, nullable=True)
-    created_at : Mapped[DateTime] = mapped_column(nullable=False, server_default=func.now())
+    created_at : Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+
+    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
+    attachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment", back_populates="message", cascade="all, delete-orphan"
+    )
 
 class Attachment(Base):
     __tablename__ = "attachments"
 
     id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    message_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id"), nullable=False)
+    message_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
     file_name : Mapped[str] = mapped_column(String(255), nullable=False)
     file_type : Mapped[str] = mapped_column(String(100), nullable=False)
     file_size : Mapped[int] = mapped_column(nullable=False)
     file_url : Mapped[str] = mapped_column(String(500), nullable=False)
-    created_at : Mapped[DateTime] = mapped_column(nullable=False, server_default=func.now())
+    created_at : Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+
+    message: Mapped["Message"] = relationship("Message", back_populates="attachments")
