@@ -22,6 +22,7 @@ from app.modules.chat_core.schemas import (
     PaginatedMessages,
     # Attachment
     AttachmentResponse,
+    MAX_ATTACHMENT_SIZE,
     # Chat
     ChatRequest,
     ChatMessageInput,
@@ -39,6 +40,15 @@ from app.modules.chat_core.services import (
 # ─────────────────────────────────────────────────────────────────────
 
 router = APIRouter(tags=["Chat"])
+
+ALLOWED_ATTACHMENT_CONTENT_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+    "text/plain",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -373,7 +383,7 @@ async def get_message(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        return await MessageService.get_by_id(db, message_id)
+        return await MessageService.get_by_id(db, message_id, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
 
@@ -389,7 +399,7 @@ async def get_message_thread(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        return await MessageService.get_thread(db, message_id)
+        return await MessageService.get_thread(db, message_id, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
 
@@ -406,7 +416,7 @@ async def update_message(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        return await MessageService.update(db, message_id, payload)
+        return await MessageService.update(db, message_id, payload, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
 
@@ -422,7 +432,7 @@ async def delete_message(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        await MessageService.delete(db, message_id)
+        await MessageService.delete(db, message_id, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
 
@@ -447,18 +457,30 @@ async def upload_attachment(
     Upload file → lưu metadata vào DB.
     Phần lưu file thực tế (S3, local…) cần inject storage service riêng.
     """
-    # Verify message tồn tại
+    # Verify message tồn tại và thuộc về current_user
     try:
-        await MessageService.get_by_id(db, message_id)
+        await MessageService.get_by_id(db, message_id, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
+
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_ATTACHMENT_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file type: {content_type}",
+        )
+
+    content = await file.read()
+    file_size = len(content)
+    if file_size > MAX_ATTACHMENT_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds maximum allowed size",
+        )
 
     # ── Storage logic (placeholder) ─────────────────────
     # file_url = await storage_service.upload(file)
     file_url = f"/uploads/{file.filename}"  # replace với URL thực
-
-    content = await file.read()
-    file_size = len(content)
 
     return await AttachmentService.create(
         db=db,
@@ -481,7 +503,7 @@ async def list_attachments(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        await MessageService.get_by_id(db, message_id)
+        await MessageService.get_by_id(db, message_id, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
 
@@ -499,7 +521,7 @@ async def delete_attachment(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        await AttachmentService.delete(db, attachment_id)
+        await AttachmentService.delete(db, attachment_id, current_user.id)
     except NotFoundException as exc:
         _handle_service_error(exc)
 

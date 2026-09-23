@@ -100,11 +100,10 @@ class ConversationService:
         is_archived: Optional[bool] = False,
         folder_id: Optional[UUID] = None,
     ) -> PaginatedConversations:
-        base_query = (
-            select(Conversation)
-            .where(Conversation.user_id == user_id)
-            .where(Conversation.is_archived == is_archived)
-        )
+        base_query = select(Conversation).where(Conversation.user_id == user_id)
+
+        if is_archived is not None:
+            base_query = base_query.where(Conversation.is_archived == is_archived)
 
         if folder_id is not None:
             base_query = base_query.where(Conversation.folder_id == folder_id)
@@ -211,7 +210,7 @@ class MessageService:
             role=payload.role,
             content=payload.content,
             model_id=payload.model_id,
-            metadata=payload.metadata,
+            meta=payload.metadata,
             token_count=token_count,
             finish_reason=finish_reason,
         )
@@ -226,11 +225,13 @@ class MessageService:
     async def get_by_id(
         db: AsyncSession,
         message_id: UUID,
+        user_id: UUID,
     ) -> Message:
         result = await db.execute(
             select(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
             .options(selectinload(Message.attachments))
-            .where(Message.id == message_id)
+            .where(Message.id == message_id, Conversation.user_id == user_id)
         )
         message = result.scalar_one_or_none()
         if not message:
@@ -279,12 +280,18 @@ class MessageService:
     async def get_thread(
         db: AsyncSession,
         message_id: UUID,
+        user_id: UUID,
     ) -> List[Message]:
         """Trả về chuỗi message từ root → message hiện tại (dùng cho branching)."""
+        # Xác thực quyền sở hữu message gốc trước khi duyệt ngược parent chain
+        await MessageService.get_by_id(db, message_id, user_id)
+
         thread: List[Message] = []
+        visited: set[UUID] = set()
         current_id: Optional[UUID] = message_id
 
-        while current_id:
+        while current_id and current_id not in visited:
+            visited.add(current_id)
             result = await db.execute(
                 select(Message)
                 .options(selectinload(Message.attachments))
@@ -305,11 +312,15 @@ class MessageService:
         db: AsyncSession,
         message_id: UUID,
         payload: MessageUpdate,
+        user_id: UUID,
     ) -> Message:
-        message = await MessageService.get_by_id(db, message_id)
+        message = await MessageService.get_by_id(db, message_id, user_id)
         update_data = payload.model_dump(exclude_unset=True)
         for field, value in update_data.items():
-            setattr(message, field, value)
+            if field == "metadata":
+                message.meta = value
+            else:
+                setattr(message, field, value)
         await db.commit()
         await db.refresh(message)
         return message
@@ -320,8 +331,9 @@ class MessageService:
     async def delete(
         db: AsyncSession,
         message_id: UUID,
+        user_id: UUID,
     ) -> None:
-        message = await MessageService.get_by_id(db, message_id)
+        message = await MessageService.get_by_id(db, message_id, user_id)
         await db.delete(message)
         await db.commit()
 
@@ -367,9 +379,13 @@ class AttachmentService:
     async def delete(
         db: AsyncSession,
         attachment_id: UUID,
+        user_id: UUID,
     ) -> None:
         result = await db.execute(
-            select(Attachment).where(Attachment.id == attachment_id)
+            select(Attachment)
+            .join(Message, Message.id == Attachment.message_id)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Attachment.id == attachment_id, Conversation.user_id == user_id)
         )
         attachment = result.scalar_one_or_none()
         if not attachment:
@@ -395,32 +411,32 @@ class ChatService:
         payload: ChatRequest,
     ) -> tuple[Conversation, Message]:
         """
-        Tạo conversation mới và lưu user message đầu tiên.
+        Tạo conversation mới và lưu user message đầu tiên trong 1 transaction duy nhất
+        (tránh để lại conversation "mồ côi" nếu bước tạo message thất bại).
         Trả về (conversation, user_message) để router tiếp tục gọi LLM.
         """
-        # 1. Tạo conversation
-        conversation = await ConversationService.create(
-            db=db,
+        conversation = Conversation(
             user_id=user_id,
-            payload=ConversationCreate(
-                model_id=payload.model_id,
-                folder_id=payload.folder_id,
-                title=payload.title or payload.message[:80],
-                system_prompt=payload.system_prompt,
-                temperature=payload.temperature,
-            ),
+            model_id=payload.model_id,
+            folder_id=payload.folder_id,
+            title=payload.title or payload.message[:80],
+            system_prompt=payload.system_prompt,
+            temperature=payload.temperature,
         )
+        db.add(conversation)
+        await db.flush()
 
-        # 2. Lưu user message
-        user_message = await MessageService.create(
-            db=db,
-            payload=MessageCreate(
-                conversation_id=conversation.id,
-                role=RoleEnum.user,
-                content=payload.message,
-                model_id=payload.model_id,
-            ),
+        user_message = Message(
+            conversation_id=conversation.id,
+            role=RoleEnum.user,
+            content=payload.message,
+            model_id=payload.model_id,
         )
+        db.add(user_message)
+
+        await db.commit()
+        await db.refresh(conversation)
+        await db.refresh(user_message)
 
         return conversation, user_message
 

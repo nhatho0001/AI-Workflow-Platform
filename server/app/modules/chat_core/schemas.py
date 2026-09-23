@@ -10,10 +10,13 @@ from app.modules.chat_core.models import RoleEnum
 # Attachment Schemas
 # ─────────────────────────────────────────────
 
+MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25 MB
+
+
 class AttachmentBase(BaseModel):
     file_name: str = Field(..., max_length=255)
     file_type: str = Field(..., max_length=100)
-    file_size: int = Field(..., gt=0)
+    file_size: int = Field(..., gt=0, le=MAX_ATTACHMENT_SIZE)
     file_url: str = Field(..., max_length=500)
 
 

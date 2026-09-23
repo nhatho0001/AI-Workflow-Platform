@@ -1,28 +1,12 @@
 import hashlib
 from app.core.config import settings
-from passlib.context import CryptContext
+from app.core.security import get_password_hash, verify_password
 from app.modules.users.service import get_by_email
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.modules.users.models import User
-from app.modules.users.schemas import UserCreate, UserUpdate , UserBase
+from app.modules.users.models import Status, User
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
-from app.modules.auth.schemes import LoginRequest ,  TokenResponse
-from typing import Any, Literal
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def get_password_hash(password: str) -> str:
-    """
-    Hashes a password using the CryptContext.
-
-    Args:
-        password: The password to be hashed.
-
-    Returns:
-        The hashed password as a string.
-    """
-    return pwd_context.hash(password)
+from typing import Any
 
 def sha256(text : str) -> str:
     """
@@ -49,27 +33,14 @@ def verify_sha256(text: str, hashed_text: str) -> bool:
     """
     return hashlib.sha256(text.encode("utf-8")).hexdigest() == hashed_text
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    Verifies a plain password against a hashed password.
-
-    Args:
-        plain_password: The plain password to verify.
-        hashed_password: The hashed password to compare against.
-
-    Returns:
-        True if the passwords match, False otherwise.
-    """
-    return pwd_context.verify(plain_password, hashed_password)
-
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | bool:
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
     user = await get_by_email(db, email)
     if not user:
-        return False
+        return None
     if not verify_password(password, user.hashed_password):
-        return False
-    if user.status != "active":
-        return False
+        return None
+    if user.status != Status.Active:
+        return None
     return user
 
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
