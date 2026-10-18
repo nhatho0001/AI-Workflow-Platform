@@ -1,0 +1,41 @@
+# Chạy: docker compose --env-file server/.env up -d --build
+# (--env-file để Postgres dùng cùng DB_USER/DB_PASSWORD/DB_NAME với server)
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?set DB_USER in server/.env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in server/.env}
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME in server/.env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    env_file: ./server/.env
+    # Tự migrate DB lên schema mới nhất trước khi bật API
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./server/app:/app/app
+      - ./server/alembic:/app/alembic
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
