@@ -47,6 +47,82 @@ Patterns worth reusing:
 - **Auth dependency chain** — `core/dependencies.py` layers `get_current_user → get_current_active_user → get_current_admin` on top of `oauth2_scheme` + JWT decoding. Prefer the `DBSession` / `CurrentUser` / `AdminUser` `Annotated` aliases in new routes instead of repeating `Depends(...)`.
 - **JWT auth** — access + refresh tokens are signed via `pyjwt`/`python-jose` (`modules/auth/utils.py`). Refresh tokens are stored **hashed** (`passlib`/`pwdlib`) in the `refresh_tokens` table (`modules/auth/models.py`) and validated by scanning a user's tokens and verifying the hash (`modules/auth/services.py:get_refresh_token_by_hash_token`), not by an indexed lookup.
 - **Chat/message tree** — `chat_core` models a branching conversation: `Message.parent_message_id` self-references `messages`, and `chat_core/services.py:MessageService.get_thread` walks parents back to the root. Its router streams responses as SSE (`text/event-stream`) with the actual LLM call left as a placeholder comment — no provider is wired in yet despite the README listing OpenAI/Claude/Gemini/Ollama/OpenRouter. **Note: `chat_core.router` is not mounted in `app/router.py` yet** (only `auth_router` and `user_router` are included), so none of its endpoints are actually reachable today.
+## Frontend (`web/`)
+
+A React 19 + Vite + TypeScript SPA was added under `web/` (login/register + a basic chat UI), separate fro
+m the `server/` backend above. It's a consumer of the backend API, not yet a description of a finished pro
+duct — several screens call endpoints the backend doesn't actually serve yet (see cross-cutting issues bel
+ow).
+
+Run from `web/`:
+
+- Install: `npm install` (or `npm ci`)
+- Dev server: `npm run dev` — Vite on port 5173, proxies `/api` and `/health` to `VITE_API_PROXY_TARGET` (
+default `http://localhost:8000`) so the browser avoids CORS (the backend has no `CORSMiddleware` configure
+d, see below)
+- Build: `npm run build` (`tsc -b && vite build`)
+- Lint: `npm run lint` (ESLint 10 flat config); typecheck only: `npm run typecheck`; format: `npm run form
+at` (Prettier + `prettier-plugin-tailwindcss`)
+- No test suite is configured here either.
+- `.env.example` documents `VITE_API_BASE_URL` (default `/api/v1`, matches the Vite proxy), `VITE_API_PROX
+Y_TARGET`, and `VITE_DEFAULT_MODEL_ID` — a placeholder UUID used because the backend requires a `model_id`
+ on conversation creation but has no models-listing endpoint yet.
+- `Dockerfile` here is a working multi-stage build (Vite build → nginx, `nginx.conf` included) — unlike `s
+erver/Dockerfile`, this one is not stale.
+
+Structure (feature-module style, same spirit as the backend):
+
+```
+web/src/
+├── main.tsx              # entry
+├── app/
+│   ├── router.tsx          # createBrowserRouter; GuestRoute/ProtectedRoute/RequireRole guards gate auth
++ auth-layout vs app-layout
+│   ├── providers.tsx       # React Query provider etc.
+│   ├── navigation.ts
+│   ├── layouts/            # auth-layout (login/register), app-layout (authenticated shell)
+│   └── routes/guards.tsx   # GuestRoute, ProtectedRoute, RequireRole(roles)
+├── features/
+│   ├── auth/                # api.ts, store.ts (zustand `useAuthStore`), hooks.ts, pages/, components/
+│   ├── chat/                 # api.ts (REST + SSE), hooks.ts, pages/chat-page.tsx, components/
+│   └── users/                 # profile + admin user management (RequireRole(["admin"]) on /admin/users)
+├── lib/
+│   ├── api-client.ts        # axios instance; attaches Bearer token; on 401 runs a single in-flight refre
+sh via POST /auth/refresh, retries original request once
+│   ├── sse.ts                 # streamSSE() helper used by chat for streaming responses
+│   └── token-storage.ts       # localStorage-backed token pair, pub/sub'd into useAuthStore
+├── components/ui/            # shadcn/ui-style primitives (button, card, input, label, textarea) — see co
+mponents.json
+└── config/env.ts             # single read point for import.meta.env (VITE_API_BASE_URL, VITE_DEFAULT_MOD
+EL_ID)
+```
+
+Patterns worth reusing:
+
+- **Auth state** lives in `features/auth/store.ts`, a zustand store whose `isAuthenticated` is derived fro
+m `token-storage.ts` and kept in sync via subscription — don't duplicate auth-check logic in components, r
+ead `useAuthStore`.
+- **Routing guards** (`app/routes/guards.tsx`) compose: `GuestRoute` (redirect away if already authenticat
+ed), `ProtectedRoute` (redirect to `/login` if not), `RequireRole(roles)` (used for `/admin/users`).
+- **Chat is lazy-loaded** (`router.tsx` uses `lazy: () => import("@/features/chat")...`) while `auth`/`use
+rs` are static imports since the layouts/guards need them immediately.
+- **SSE streaming**: `features/chat/api.ts` posts to `/chat/start` and `/chat/conversations/:id/messages`
+via `lib/sse.ts:streamSSE`, not plain axios — follow that pattern for any new streaming endpoint rather th
+an adding one-off `EventSource`/`fetch` code.
+
+**Cross-cutting issues between `web/` and `server/`** — worth checking before assuming a chat/auth flow wo
+rks end-to-end:
+
+- The chat UI (`features/chat/api.ts`) calls `/chat/conversations`, `/chat/start`, `/chat/conversations/:i
+d/messages`, etc., but per the backend section above, `chat_core.router` **is not mounted** in `app/router
+.py` yet — these requests will 404 against a real backend run.
+- `authApi.login`/`register` expect a `TokenPair` response from `/auth/login`/`/auth/register`, but the ba
+ckend's `auth/services.py` currently `ImportError`s on startup (`BaseService` doesn't exist in `modules/ba
+se.py`) — the whole auth router is broken until that's fixed server-side.
+- The frontend's dev proxy is a workaround for the backend never calling `app.add_middleware(CORSMiddlewar
+e, ...)` — if that gets fixed server-side, the proxy becomes optional but shouldn't need removing.
+- Conversation creation requires a `model_id`; the frontend currently hardcodes `VITE_DEFAULT_MODEL_ID` si
+nce there's no models endpoint on the backend to list real ones.
 
 ## Known issues in the current code
 
