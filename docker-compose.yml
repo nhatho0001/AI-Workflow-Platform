@@ -37,5 +37,18 @@ services:
     ports:
       - "8000:8000"
 
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_DEFAULT_MODEL_ID: ${VITE_DEFAULT_MODEL_ID:-00000000-0000-0000-0000-000000000001}
+    restart: unless-stopped
+    # nginx phục vụ SPA và proxy /api → server:8000
+    depends_on:
+      - server
+    ports:
+      - "3000:80"
+
 volumes:
   postgres_data:
