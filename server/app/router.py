@@ -2,11 +2,15 @@ from fastapi import APIRouter
 from app.modules.auth.router import router as auth_router
 from app.modules.users.router import router as user_router
 from app.modules.chat_core.router import router as chat_router
+from app.modules.ai_models.router import router as ai_model_router
 
 api_router = APIRouter(prefix="/api/v1")
 
 # Public — không cần JWT
 api_router.include_router(auth_router, prefix="/auth", tags=["Auth"])
+
+# Protected — JWT được enforce BÊN TRONG từng feature router
+api_router.include_router(ai_model_router, prefix="/ai-models", tags=["AI Models"])
 
 # Protected — JWT được enforce BÊN TRONG từng feature router
 api_router.include_router(user_router, prefix="/users", tags=["Users"])
