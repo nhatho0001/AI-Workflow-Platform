@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 import uuid
-import datetime
+from datetime import datetime
 from app.modules.ai_models.models import AIModelProvider
 
 

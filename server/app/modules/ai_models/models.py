@@ -1,5 +1,5 @@
 from app.core.database import Base
-from sqlalchemy import Integer, String, Enum as SAEnum , ForeignKey , func , JSON , UniqueConstraint
+from sqlalchemy import Integer, String, Enum as SAEnum , func , JSON , UniqueConstraint
 from sqlalchemy.orm import relationship , Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
@@ -21,7 +21,7 @@ class AIModel(Base):
     model_name : Mapped[str] = mapped_column(String(255) , nullable = False)
     display_name : Mapped[str] = mapped_column(String(255) , nullable = False)
     default_params : Mapped[dict] = mapped_column("default_params" , JSON, nullable=True)
-    contexts : Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    context_window : Mapped[int] = mapped_column(Integer, nullable=True)
     capabilities : Mapped[dict] = mapped_column("capabilities" , JSON, default=[], nullable=True)
     is_enabled : Mapped[bool] = mapped_column(nullable=False, default=True)
     is_default : Mapped[bool] = mapped_column(nullable=False, default=False)
