@@ -4,139 +4,71 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-AI Workflow Platform is an open-source Python/FastAPI backend for building AI Agents and multi-step AI Workflows for businesses (in spirit similar to Microsoft Copilot Studio, n8n AI, or LangGraph Platform). It's also an explicit learning project pairing **AI Engineering** (LLM integration, RAG, tool calling, multi-agent, MCP) with **Backend Engineering** (FastAPI, async SQLAlchemy, PostgreSQL, Celery, clean architecture) — see `README.md` (in Vietnamese) for the full vision and roadmap.
+AI Workflow Platform is an open-source backend + SPA for building AI Agents and multi-step AI Workflows for businesses (in spirit similar to Copilot Studio, n8n AI, or LangGraph Platform). It's also an explicit learning project pairing **AI Engineering** (LLM integration, RAG, tool calling, multi-agent, MCP) with **Backend Engineering** (FastAPI, async SQLAlchemy, PostgreSQL, Celery, clean architecture) — see `README.md` (Vietnamese) for the vision and roadmap. Code comments and docstrings are frequently in Vietnamese.
 
-The repo currently contains only the backend, in `server/`. There is no frontend, no Celery/Redis/vector-DB integration, no RAG, and no LLM provider wired in yet — the project is early in **Phase 1** of the roadmap (Auth, PostgreSQL, Docker, User Management, Chat API skeleton). Treat `README.md`'s architecture diagram and module list (Workflow Engine, AI Engine, Tool Engine, MCP, Celery workers, etc.) as a design target, not a description of what exists in code today.
+The project is in **Phase 1** of the roadmap (Auth, PostgreSQL, Docker, User Management, Chat API skeleton, AI model catalog). There is no Celery/Redis/vector DB, no RAG, and **no LLM provider wired in** — `server/app/ai/` exists as an empty placeholder for the future AI Engine. Treat `README.md`'s architecture diagram (Workflow Engine, Tool Engine, MCP, workers…) as a design target, not a description of the code.
 
 ## Commands
 
-Run from `server/` (the FastAPI project root, dependency-managed with `uv`, lockfile `uv.lock`):
+### Full stack (Docker)
 
-- Install/sync dependencies: `uv sync`
-- Run the dev server: `uv run uvicorn app.main:app --reload` — see the import-path caveat below; this may need `--app-dir` or a different cwd depending on which files you've touched.
-- Docker build: `docker build -t ai-workflow-server .` from `server/` — currently **broken**, see below.
+From the repo root: `docker compose --env-file server/.env up -d --build`
+- `db` (Postgres 16, port 5432), `server` (port 8000), `web` (nginx, port 3000, proxies `/api` → `server:8000`).
+- The `server` container runs `alembic upgrade head` before uvicorn, and bind-mounts `server/app` and `server/alembic` with `--reload`, so code edits hot-reload without rebuilding.
+- `--env-file` is required so Postgres gets the same `DB_USER`/`DB_PASSWORD`/`DB_NAME` as the server. Inside compose, `DB_HOST`/`DB_PORT` are overridden to `db`/`5432`.
 
-There is no test suite, linter, or formatter configured (`server/tests/` and `server/alembic/` exist as empty scaffold directories; `pyproject.toml` has no `[tool.pytest]`/`[tool.ruff]`/`[tool.black]` sections; no `.github/workflows`). Don't assume `pytest`/`ruff` commands work — if you add them, wire up the config too.
+### Backend (`server/`, managed by `uv`)
 
-## Architecture
+Run everything from `server/` — imports use `app.` as the root (`from app.core.config import settings`), and `Settings` reads `.env` relative to the cwd.
 
-Backend code lives under `server/app/`, organized **by feature module**, not by technical layer:
+- Setup: `cp .env.example .env`, then `uv sync`
+- Dev server: `uv run uvicorn app.main:app --reload` (needs a reachable Postgres; OpenAPI docs at `/docs`)
+- Migrations (Alembic, async engine, URL taken from `settings.DATABASE_URL`):
+  - Apply: `uv run alembic upgrade head`
+  - New: `uv run alembic revision --autogenerate -m "..."` — file names are timestamp-prefixed (`alembic.ini:file_template`)
+  - A new model module **must be imported in `alembic/env.py`**, otherwise autogenerate won't see its tables.
+  - Postgres enums: new enum *values* need a hand-written `ALTER TYPE ... ADD VALUE`, and downgrades must drop the enum type explicitly (see the existing migrations).
 
-```
-app/
-├── main.py              # FastAPI() app, mounts api_router, defines /health
-├── router.py            # root APIRouter; includes each module's router under /api/v1
-├── core/
-│   ├── config.py          # pydantic-settings Settings, loaded from server/.env
-│   ├── database.py        # async SQLAlchemy engine, Base, get_session() dependency
-│   ├── dependencies.py    # get_current_user → get_current_active_user → get_current_admin
-│   │                       # + Annotated shortcuts: DBSession, CurrentUser, AdminUser
-│   └── exceptions.py      # NotFoundException / ForbiddenException (HTTPException subclasses)
-└── modules/
-    ├── base.py             # generic CRUDBase[Model, CreateSchema, UpdateSchema] repository
-    ├── auth/                # login/register/refresh/logout, RefreshToken model
-    ├── users/               # User model (Role/Status enums), user CRUD endpoints
-    └── chat_core/           # Conversation/Message/Attachment models, SSE chat streaming
-```
+There is no test suite, linter, or formatter configured for the backend (`server/tests/` is empty, and `pyproject.toml` has no pytest/ruff config). If you add them, add the config too.
 
-Each feature module (`modules/<name>/`) follows the same four-file shape: `models.py` (SQLAlchemy `Base` subclasses), `schemas.py`/`schemes.py` (Pydantic request/response models), `service(s).py` (business logic + queries), `router.py` (`APIRouter`, wired into `app/router.py`). Follow this layout for new features rather than the layered `api/`/`repositories/`/`services/` structure sketched in the README — that structure was never built.
+### Frontend (`web/`)
 
-Patterns worth reusing:
+- `npm install`, `npm run dev` (Vite on 5173, proxies `/api` and `/health` to `VITE_API_PROXY_TARGET`, default `http://localhost:8000`)
+- `npm run build` (`tsc -b && vite build`), `npm run lint`, `npm run typecheck`, `npm run format` (Prettier + tailwind plugin)
+- No test suite.
 
-- **Generic CRUD** — `modules/base.py:CRUDBase` provides `get`/`get_multi`/`create`/`update`/`remove` for any model. Feature services instantiate it directly (e.g. `user_service = CRUDBase[User, UserCreate, UserUpdate](User)` in `modules/users/service.py`) and add bespoke query functions (e.g. `get_by_email`) alongside it, rather than subclassing it.
-- **Auth dependency chain** — `core/dependencies.py` layers `get_current_user → get_current_active_user → get_current_admin` on top of `oauth2_scheme` + JWT decoding. Prefer the `DBSession` / `CurrentUser` / `AdminUser` `Annotated` aliases in new routes instead of repeating `Depends(...)`.
-- **JWT auth** — access + refresh tokens are signed via `pyjwt`/`python-jose` (`modules/auth/utils.py`). Refresh tokens are stored **hashed** (`passlib`/`pwdlib`) in the `refresh_tokens` table (`modules/auth/models.py`) and validated by scanning a user's tokens and verifying the hash (`modules/auth/services.py:get_refresh_token_by_hash_token`), not by an indexed lookup.
-- **Chat/message tree** — `chat_core` models a branching conversation: `Message.parent_message_id` self-references `messages`, and `chat_core/services.py:MessageService.get_thread` walks parents back to the root. Its router streams responses as SSE (`text/event-stream`) with the actual LLM call left as a placeholder comment — no provider is wired in yet despite the README listing OpenAI/Claude/Gemini/Ollama/OpenRouter. **Note: `chat_core.router` is not mounted in `app/router.py` yet** (only `auth_router` and `user_router` are included), so none of its endpoints are actually reachable today.
-## Frontend (`web/`)
+## Backend architecture (`server/app/`)
 
-A React 19 + Vite + TypeScript SPA was added under `web/` (login/register + a basic chat UI), separate fro
-m the `server/` backend above. It's a consumer of the backend API, not yet a description of a finished pro
-duct — several screens call endpoints the backend doesn't actually serve yet (see cross-cutting issues bel
-ow).
+Organized **by feature module**, not by technical layer. Ignore the `api/`/`repositories/`/`services/` layout sketched in the README; it was never built.
 
-Run from `web/`:
+- `main.py`: the FastAPI app with a `UTF8JSONResponse` default (`ensure_ascii=False`, so Vietnamese text isn't escaped), plus `/health`.
+- `router.py`: the root `APIRouter(prefix="/api/v1")`. It mounts `auth` (`/auth`, public), `ai_models` (`/ai-models`), `users` (`/users`) and `chat_core` (`/chat`). Auth is enforced **inside** each feature router, not at mount time.
+- `core/`: `config.py` (pydantic-settings; `DATABASE_URL` is a computed `postgresql+asyncpg://` property), `database.py` (async engine, `Base`, `get_session`), `security.py` (bcrypt via passlib), `dependencies.py`, `exceptions.py` (`NotFoundException`/`ForbiddenException`).
+- `modules/<name>/`: each module has `models.py`, `schemas.py` (`schemes.py` in `auth`), `service(s).py`, `router.py`. Follow this shape for new features.
 
-- Install: `npm install` (or `npm ci`)
-- Dev server: `npm run dev` — Vite on port 5173, proxies `/api` and `/health` to `VITE_API_PROXY_TARGET` (
-default `http://localhost:8000`) so the browser avoids CORS (the backend has no `CORSMiddleware` configure
-d, see below)
-- Build: `npm run build` (`tsc -b && vite build`)
-- Lint: `npm run lint` (ESLint 10 flat config); typecheck only: `npm run typecheck`; format: `npm run form
-at` (Prettier + `prettier-plugin-tailwindcss`)
-- No test suite is configured here either.
-- `.env.example` documents `VITE_API_BASE_URL` (default `/api/v1`, matches the Vite proxy), `VITE_API_PROX
-Y_TARGET`, and `VITE_DEFAULT_MODEL_ID` — a placeholder UUID used because the backend requires a `model_id`
- on conversation creation but has no models-listing endpoint yet.
-- `Dockerfile` here is a working multi-stage build (Vite build → nginx, `nginx.conf` included) — unlike `s
-erver/Dockerfile`, this one is not stale.
+Patterns to reuse:
 
-Structure (feature-module style, same spirit as the backend):
+- **Generic CRUD**: `modules/base.py:CRUDBase[Model, Create, Update]` provides `get`/`get_multi`/`create`/`update`/`remove`. It commits inside each call and converts `IntegrityError` into HTTP 409. Services instantiate it directly (`ai_model_service = CRUDBase[AIModel, CreateAIModel, UpdateAIModel](AIModel)`) and put bespoke queries next to it as module-level functions; they don't subclass it. `update` uses `model_dump(exclude_unset=True)`, so PATCH schemas should be standalone all-optional models, not subclasses of the create schema.
+- **Auth dependencies**: `core/dependencies.py` chains `get_current_user → get_current_active_user → get_current_admin`. In route signatures, use the `Annotated` aliases `DBSession`, `CurrentUser` and `AdminUser` directly. Don't wrap them in another `Depends(...)`.
+- **JWT**: tokens are encoded with `python-jose` and carry a `token_type` claim (`access_token` / `refresh_token`) that the dependencies and `/auth/refresh` check. Refresh tokens are stored as a **SHA-256 hash** in `refresh_tokens`, looked up by `(user_id, token_hash)`, and rotated on every refresh (delete old, insert new).
+- **All primary keys are UUIDs** (`UUID(as_uuid=True)`, `default=uuid.uuid4`).
+- **AI model catalog** (`modules/ai_models/`): the registry of LLMs the platform may use. `GET /ai-models` returns only enabled models as `AIModelPublic` (no `model_name`/`default_params`); everything else is admin-only. DELETE is a **soft delete** (`is_enabled=False`) because conversations reference the id. The single default model is enforced both by a partial unique index (`uq_ai_models_single_default`) and by `_clear_default` in the same transaction. `AIModelProvider` values must match the keys of the future `app/ai/providers/factory.py` registry. **Read `modules/ai_models/README.md` before changing this module.** It is the design spec, including the planned `to_model_config()` boundary between the DB and the AI Engine and a checklist for adding a provider. Its "Trạng thái hiện tại" section lists issues as of 2026-11-03, most of which have since been fixed.
+- **Chat** (`modules/chat_core/`): branching conversations. `Message.parent_message_id` references `messages` itself, and `MessageService.get_thread` walks back to the root. `/chat/start` and `/chat/conversations/{id}/messages` stream SSE (`data: {"event": ..., "data": ...}`, ending with `data: [DONE]`). The LLM call is a commented-out placeholder, so the assistant reply saved today is empty. Attachment storage is also a placeholder (`file_url = /uploads/<name>`). The service layer raises `NotFoundException`/`ForbiddenException`, and the router maps them through `_handle_service_error`.
 
-```
-web/src/
-├── main.tsx              # entry
-├── app/
-│   ├── router.tsx          # createBrowserRouter; GuestRoute/ProtectedRoute/RequireRole guards gate auth
-+ auth-layout vs app-layout
-│   ├── providers.tsx       # React Query provider etc.
-│   ├── navigation.ts
-│   ├── layouts/            # auth-layout (login/register), app-layout (authenticated shell)
-│   └── routes/guards.tsx   # GuestRoute, ProtectedRoute, RequireRole(roles)
-├── features/
-│   ├── auth/                # api.ts, store.ts (zustand `useAuthStore`), hooks.ts, pages/, components/
-│   ├── chat/                 # api.ts (REST + SSE), hooks.ts, pages/chat-page.tsx, components/
-│   └── users/                 # profile + admin user management (RequireRole(["admin"]) on /admin/users)
-├── lib/
-│   ├── api-client.ts        # axios instance; attaches Bearer token; on 401 runs a single in-flight refre
-sh via POST /auth/refresh, retries original request once
-│   ├── sse.ts                 # streamSSE() helper used by chat for streaming responses
-│   └── token-storage.ts       # localStorage-backed token pair, pub/sub'd into useAuthStore
-├── components/ui/            # shadcn/ui-style primitives (button, card, input, label, textarea) — see co
-mponents.json
-└── config/env.ts             # single read point for import.meta.env (VITE_API_BASE_URL, VITE_DEFAULT_MOD
-EL_ID)
-```
+## Frontend architecture (`web/src/`)
 
-Patterns worth reusing:
+React 19 + Vite + TypeScript, organized by feature (`features/auth`, `features/chat`, `features/users`). Each feature has its own `api.ts`, `hooks.ts` (React Query), `pages/` and `components/`.
 
-- **Auth state** lives in `features/auth/store.ts`, a zustand store whose `isAuthenticated` is derived fro
-m `token-storage.ts` and kept in sync via subscription — don't duplicate auth-check logic in components, r
-ead `useAuthStore`.
-- **Routing guards** (`app/routes/guards.tsx`) compose: `GuestRoute` (redirect away if already authenticat
-ed), `ProtectedRoute` (redirect to `/login` if not), `RequireRole(roles)` (used for `/admin/users`).
-- **Chat is lazy-loaded** (`router.tsx` uses `lazy: () => import("@/features/chat")...`) while `auth`/`use
-rs` are static imports since the layouts/guards need them immediately.
-- **SSE streaming**: `features/chat/api.ts` posts to `/chat/start` and `/chat/conversations/:id/messages`
-via `lib/sse.ts:streamSSE`, not plain axios — follow that pattern for any new streaming endpoint rather th
-an adding one-off `EventSource`/`fetch` code.
+- **Auth state**: `features/auth/store.ts` is a zustand store whose `isAuthenticated` comes from `lib/token-storage.ts` (localStorage, pub/sub). Read `useAuthStore` rather than re-deriving auth state.
+- **HTTP**: `lib/api-client.ts` is an axios instance that attaches the Bearer token. On a 401 it runs a single in-flight `POST /auth/refresh` and retries the original request once.
+- **Streaming**: use `lib/sse.ts:streamSSE` (as `features/chat/api.ts` does) for any streaming endpoint. Don't add one-off `EventSource`/`fetch` code.
+- **Routing**: `app/router.tsx` with the guards in `app/routes/guards.tsx` (`GuestRoute`, `ProtectedRoute`, `RequireRole(["admin"])` for `/admin/users`). Chat is lazy-loaded.
+- `config/env.ts` is the single place that reads `import.meta.env`.
 
-**Cross-cutting issues between `web/` and `server/`** — worth checking before assuming a chat/auth flow wo
-rks end-to-end:
+## Known gaps and rough edges
 
-- The chat UI (`features/chat/api.ts`) calls `/chat/conversations`, `/chat/start`, `/chat/conversations/:i
-d/messages`, etc., but per the backend section above, `chat_core.router` **is not mounted** in `app/router
-.py` yet — these requests will 404 against a real backend run.
-- `authApi.login`/`register` expect a `TokenPair` response from `/auth/login`/`/auth/register`, but the ba
-ckend's `auth/services.py` currently `ImportError`s on startup (`BaseService` doesn't exist in `modules/ba
-se.py`) — the whole auth router is broken until that's fixed server-side.
-- The frontend's dev proxy is a workaround for the backend never calling `app.add_middleware(CORSMiddlewar
-e, ...)` — if that gets fixed server-side, the proxy becomes optional but shouldn't need removing.
-- Conversation creation requires a `model_id`; the frontend currently hardcodes `VITE_DEFAULT_MODEL_ID` si
-nce there's no models endpoint on the backend to list real ones.
-
-## Known issues in the current code
-
-The codebase is early-stage with some real rough edges — worth knowing so you don't mistake pre-existing breakage for something your change caused:
-
-- **Mixed import roots.** Most files import with `server/` as the root (`from app.core.config import settings`, `from app.modules.auth.models import ...`), but `app/main.py`, `app/router.py`, `modules/auth/router.py`, and `modules/auth/services.py` import as if `app/` itself were the root (`from core.config import settings`, `from schemes import ...`, `from modules.auth.router import router`, `from utils import ...`). These two styles can't both resolve from a single `cwd`/`PYTHONPATH` — check the actual import style used in whichever file you're editing before adding new imports.
-- **`chat_core` isn't fully wired.** `modules/chat_core/router.py` imports `get_db` from `app.core.database` (only `get_session` is defined there) and imports `User` from `app.modules.auth.models` (the `User` model actually lives in `app.modules.users.models`).
-- **`auth/services.py` imports a class that doesn't exist.** `authentication_service = BaseService[RefreshToken, ...](RefreshToken)` imports `BaseService` from `app.modules.base`, but that module only defines `CRUDBase` — this `ImportError`s, breaking the whole auth router that depends on it.
-- **`users/router.py` calls a method `CRUDBase` doesn't have.** `GET /users/` calls `crud.get_users(db, skip=skip, limit=limit)`, but `CRUDBase` only defines `get_multi`, not `get_users`.
-- **`User.id` type is inconsistent across modules.** `modules/users/models.py` defines `User.id` as an `int`, but `modules/chat_core/models.py` targets `ForeignKey("users.id")` from a Postgres `UUID` column — these can't both be right against the same table.
-- **Missing settings.** `core/database.py` reads `settings.DATABASE_URL`, and `modules/auth/utils.py` reads `settings.JWT_REFRESH_TOKEN_EXPIRE_MINUTES` — neither field exists on the `Settings` class in `core/config.py` (only the discrete `DB_*` fields and `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` are defined).
-- **Duplicate schema definitions.** `LoginRequest` is defined in both `modules/auth/schemes.py` and `modules/users/schemas.py` — check both when touching login/auth request shapes.
-- **Dependency list is incomplete.** `core/config.py` imports `pydantic-settings`, but it isn't listed in `server/pyproject.toml`'s `dependencies`. Separately, `pwdlib[argon2]` is installed but unused — password hashing actually goes through `passlib`'s bcrypt `CryptContext`.
-- **`CORS_ORIGINS` setting exists but isn't used.** `main.py` never calls `app.add_middleware(CORSMiddleware, ...)`, so the setting currently has no effect.
-- **`server/Dockerfile` is stale.** It `COPY requirements.txt` and `pip install`s from it, but the project has no `requirements.txt` — dependencies are managed via `uv` (`pyproject.toml` + `uv.lock`). The Dockerfile will fail to build as-is.
-- **`server/.env` is present but empty**, and there's no `.env.example`. Required vars (all non-optional, per `core/config.py`): `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, `SECRET_KEY`. Optional: `APP_NAME`, `APP_VERSION`, `DEBUG`, `CORS_ORIGINS`.
-- **No migrations.** `server/alembic/` exists but is empty (no `env.py`/versions) — the DB schema currently exists only as SQLAlchemy model definitions, not as tracked migrations.
+- **The frontend doesn't use `/ai-models` yet.** It still sends a hardcoded `VITE_DEFAULT_MODEL_ID` as the `model_id` when creating conversations.
+- **`model_id` isn't validated or constrained.** `Conversation.model_id` and `Message.model_id` are plain UUID columns with no FK to `ai_models`, and `chat_core` doesn't call `ai_models.services.get_enabled_or_404` yet. The ai_models README says it should.
+- **CORS isn't wired up.** The `CORS_ORIGINS` setting exists, but `main.py` never adds `CORSMiddleware`. The Vite dev proxy and the nginx proxy are what make the browser side work.
+- **Role checks compare strings** (`current_user.role != "admin"`). That works because `Role`/`Status` are `str` enums. Note that the `users` enums are stored by member *name* in Postgres, while `ai_model_provider` stores *values* via `values_callable`.
+- `modules/auth/dependencies.py` is an empty file.
