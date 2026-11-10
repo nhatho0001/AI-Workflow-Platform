@@ -23,6 +23,18 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int
     JWT_REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 ngày
     SECRET_KEY: str
+
+    # AI providers — key để trống = provider chưa bật (chỉ lỗi khi có model dùng provider đó được gọi)
+    OPENAI_API_KEY: str | None = None
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    ANTHROPIC_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OLLAMA_API_KEY: str | None = None  # chỉ cần với Ollama Cloud
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"  # endpoint tương thích OpenAI của Ollama
+    AI_REQUEST_TIMEOUT: float = 120.0  # giây
+    AI_MAX_RETRIES: int = 2
+
     # CORS settings
     CORS_ORIGINS: List[str] = ["*"]  # Allow all origins by default
     @property

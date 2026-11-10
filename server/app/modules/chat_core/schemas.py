@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import AliasChoices, BaseModel, Field, ConfigDict
 from typing import Optional, List, Any
 from datetime import datetime
 from enum import Enum
@@ -38,8 +38,9 @@ class AttachmentResponse(AttachmentBase):
 
 class MessageBase(BaseModel):
     role: RoleEnum
-    content: str = Field(..., max_length=2000)
-    metadata: Optional[dict[str, Any]] = None
+    content: str  # không giới hạn: assistant reply có thể rất dài (input của user giới hạn ở ChatMessageInput/ChatRequest)
+    # ORM lưu ở thuộc tính `meta` (`Message.metadata` là MetaData của SQLAlchemy) → đọc `meta` trước
+    metadata: Optional[dict[str, Any]] = Field(None, validation_alias=AliasChoices("meta", "metadata"))
 
 
 class MessageCreate(MessageBase):

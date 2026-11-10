@@ -1,11 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload
-from typing import Optional, List
+from typing import Any, AsyncIterator, Optional, List
 from uuid import UUID
 from fastapi import HTTPException
 import math
 
+from app.ai import ChatMessage, RunCompleted, RunContext, RunFailed, ai_service
+from app.modules.ai_models import services as ai_model_services
 from app.modules.chat_core.models import Conversation, Message, Attachment, RoleEnum
 from app.modules.chat_core.schemas import (
     ConversationCreate,
@@ -32,6 +34,7 @@ class ConversationService:
         user_id: UUID,
         payload: ConversationCreate,
     ) -> Conversation:
+        await ai_model_services.get_enabled_or_404(db, payload.model_id)
         conversation = Conversation(
             user_id=user_id,
             model_id=payload.model_id,
@@ -143,6 +146,10 @@ class ConversationService:
         conversation = await ConversationService.get_by_id(db, conversation_id, user_id)
 
         update_data = payload.model_dump(exclude_unset=True)
+        if "model_id" in update_data:
+            if update_data["model_id"] is None:
+                raise HTTPException(status_code=422, detail="model_id cannot be null")
+            await ai_model_services.get_enabled_or_404(db, update_data["model_id"])
         for field, value in update_data.items():
             setattr(conversation, field, value)
 
@@ -415,6 +422,9 @@ class ChatService:
         (tránh để lại conversation "mồ côi" nếu bước tạo message thất bại).
         Trả về (conversation, user_message) để router tiếp tục gọi LLM.
         """
+        # Validate trước khi ghi gì vào DB → model sai trả 404 thay vì tạo conversation hỏng
+        await ai_model_services.get_enabled_or_404(db, payload.model_id)
+
         conversation = Conversation(
             user_id=user_id,
             model_id=payload.model_id,
@@ -448,13 +458,15 @@ class ChatService:
         content: str,
         parent_message_id: Optional[UUID] = None,
         metadata: Optional[dict] = None,
-    ) -> Message:
+    ) -> tuple[Conversation, Message]:
         """
         Gửi tiếp message vào conversation đã có.
-        Trả về user_message; assistant reply do router xử lý sau.
+        Trả về (conversation, user_message); assistant reply do stream_reply xử lý sau.
         """
-        # Verify ownership
+        # Verify ownership + model còn bật (admin có thể đã tắt model sau khi conversation được tạo)
         conversation = await ConversationService.get_by_id(db, conversation_id, user_id)
+        await ai_model_services.get_enabled_or_404(db, conversation.model_id)
+        parent_message_id = await ChatService._resolve_parent(db, conversation.id, parent_message_id)
 
         user_message = await MessageService.create(
             db=db,
@@ -468,7 +480,102 @@ class ChatService:
             ),
         )
 
-        return user_message
+        return conversation, user_message
+
+    @staticmethod
+    async def _resolve_parent(
+        db: AsyncSession,
+        conversation_id: UUID,
+        parent_message_id: Optional[UUID],
+    ) -> Optional[UUID]:
+        """
+        - Có parent: phải thuộc cùng conversation (nếu không, get_thread sẽ đi sang thread của người khác
+          và đưa nội dung đó vào prompt).
+        - Không có parent: nối tiếp message mới nhất → chat tuyến tính vẫn giữ được history.
+        """
+        if parent_message_id is not None:
+            found = await db.scalar(
+                select(Message.id).where(
+                    Message.id == parent_message_id,
+                    Message.conversation_id == conversation_id,
+                )
+            )
+            if found is None:
+                raise HTTPException(status_code=404, detail=f"Message {parent_message_id} not found")
+            return parent_message_id
+
+        return await db.scalar(
+            select(Message.id)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )
+
+    # ── AI Engine ───────────────────────────────────────────
+
+    @staticmethod
+    async def build_run_context(
+        db: AsyncSession,
+        conversation: Conversation,
+        user_message: Message,
+        user_id: UUID,
+    ) -> RunContext:
+        """Chuyển dữ liệu DB → RunContext (kiểu thuần) cho AI Engine. Gọi TRƯỚC khi mở stream để lỗi trả HTTP thường."""
+        ai_model = await ai_model_services.get_enabled_or_404(db, conversation.model_id)
+        # Chỉ lấy nhánh root → user_message hiện tại (branching), không lấy toàn bộ conversation
+        thread = await MessageService.get_thread(db, user_message.id, user_id)
+        return RunContext(
+            model=ai_model_services.to_model_config(ai_model, {"temperature": conversation.temperature}),
+            messages=[ChatMessage(role=m.role.value, content=m.content) for m in thread],
+            system_prompt=conversation.system_prompt,
+            user_id=user_id,
+            conversation_id=conversation.id,
+        )
+
+    @staticmethod
+    async def stream_reply(
+        db: AsyncSession,
+        ctx: RunContext,
+        conversation: Conversation,
+        user_message: Message,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """
+        Chạy AI Engine và trả về các payload SSE ({"event", "data"}).
+        RunCompleted/RunFailed → lưu assistant message rồi phát `message_done`/`error`;
+        mọi event khác (delta, context, sau này là tool/workflow…) được chuyển thẳng cho client.
+        """
+        async for event in ai_service.stream(ctx):
+            if isinstance(event, RunCompleted):
+                assistant_message = await ChatService.save_assistant_reply(
+                    db=db,
+                    conversation_id=conversation.id,
+                    content=event.content,
+                    model_id=conversation.model_id,
+                    parent_message_id=user_message.id,
+                    token_count=event.usage.output_tokens,
+                    finish_reason=event.finish_reason,
+                    metadata={"usage": event.usage.to_dict(), **event.metadata},
+                )
+                yield {"event": "message_done", "data": {
+                    "assistant_message_id": str(assistant_message.id),
+                    "token_count": event.usage.output_tokens,
+                    "finish_reason": event.finish_reason,
+                }}
+            elif isinstance(event, RunFailed):
+                # Giữ lại phần đã stream được (nếu có) để user không mất nội dung
+                if event.partial_content:
+                    await ChatService.save_assistant_reply(
+                        db=db,
+                        conversation_id=conversation.id,
+                        content=event.partial_content,
+                        model_id=conversation.model_id,
+                        parent_message_id=user_message.id,
+                        finish_reason="error",
+                        metadata={"error": {"code": event.code, "message": event.message}},
+                    )
+                yield {"event": "error", "data": {"code": event.code, "message": event.message}}
+            else:
+                yield event.to_payload()
 
     @staticmethod
     async def save_assistant_reply(

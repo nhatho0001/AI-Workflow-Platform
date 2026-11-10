@@ -1,5 +1,5 @@
 from app.core.database import Base
-from sqlalchemy import String, Enum as SAEnum , ForeignKey , func , JSON
+from sqlalchemy import String, Text, Enum as SAEnum , ForeignKey , func , JSON
 from sqlalchemy.orm import relationship , Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
@@ -41,7 +41,8 @@ class Message(Base):
     conversation_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
     parent_message_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
     role : Mapped[RoleEnum] = mapped_column(SAEnum(RoleEnum), nullable=False)
-    content : Mapped[str] = mapped_column(String(2000), nullable=False)
+    # Text: câu trả lời của LLM dài tuỳ ý; giới hạn độ dài input của user nằm ở schema (ChatMessageInput)
+    content : Mapped[str] = mapped_column(Text, nullable=False)
     token_count : Mapped[int] = mapped_column(nullable=False, default=0)
     model_id : Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
     finish_reason : Mapped[str] = mapped_column(String(255), nullable=True)

@@ -1,13 +1,15 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.providers.base import ModelConfig
 from app.core.exceptions import NotFoundException
 from app.modules.ai_models.models import AIModel
-from app.modules.ai_models.schemas import CreateAIModel, UpdateAIModel
+from app.modules.ai_models.schemas import CreateAIModel, ModelParams, UpdateAIModel
 from app.modules.base import CRUDBase
 
 ai_model_service = CRUDBase[AIModel, CreateAIModel, UpdateAIModel](AIModel)
@@ -44,6 +46,27 @@ async def get_default(db: AsyncSession) -> AIModel | None:
         select(AIModel).where(AIModel.is_default.is_(True), AIModel.is_enabled.is_(True))
     )
     return result.scalar_one_or_none()
+
+
+# ── Ranh giới DB → AI Engine ───────────────────────────
+
+def to_model_config(model: AIModel, overrides: Mapping[str, Any] | None = None) -> ModelConfig:
+    """
+    Nơi DUY NHẤT merge tham số (README §4): overrides (request/conversation) > default_params.
+    Giá trị None trong overrides nghĩa là "không ghi đè". Key lạ → ValidationError (ModelParams forbid extra).
+    """
+    merged = {**(model.default_params or {}), **{k: v for k, v in (overrides or {}).items() if v is not None}}
+    params = ModelParams(**merged)
+    return ModelConfig(
+        provider=model.provider.value,
+        model_name=model.model_name,
+        temperature=params.temperature,
+        max_tokens=params.max_tokens,
+        top_p=params.top_p,
+        stop=tuple(params.stop) if params.stop else None,
+        context_window=model.context_window,
+        capabilities=frozenset(model.capabilities or ()),
+    )
 
 
 # ── Mutations ──────────────────────────────────────────

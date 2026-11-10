@@ -230,12 +230,14 @@ async def start_chat(
     """
     Tạo conversation mới, lưu user message, sau đó stream response từ LLM.
     Client nhận SSE: `data: <json_chunk>\\n\\n`, kết thúc bằng `data: [DONE]\\n\\n`.
+    Event: conversation_created → (context) → delta* → message_done | error.
     """
     conversation, user_message = await ChatService.start_chat(
         db=db,
         user_id=current_user.id,
         payload=payload,
     )
+    ctx = await ChatService.build_run_context(db, conversation, user_message, current_user.id)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         # Gửi metadata conversation + user_message ngay lập tức
@@ -243,35 +245,8 @@ async def start_chat(
             "conversation_id": str(conversation.id),
             "user_message_id": str(user_message.id),
         }})
-
-        # ── Gọi LLM ở đây (placeholder — thay bằng LLM client thực) ──
-        full_content = ""
-        token_count = 0
-        finish_reason = "stop"
-
-        # Giả lập stream từ LLM (replace bằng openai/anthropic async stream)
-        # async for chunk in llm_client.stream(...):
-        #     full_content += chunk.delta
-        #     token_count = chunk.usage.total_tokens
-        #     finish_reason = chunk.finish_reason or finish_reason
-        #     yield _sse({"event": "delta", "data": {"content": chunk.delta}})
-
-        # Sau khi stream xong → lưu assistant message vào DB
-        assistant_message = await ChatService.save_assistant_reply(
-            db=db,
-            conversation_id=conversation.id,
-            content=full_content,
-            model_id=conversation.model_id,
-            parent_message_id=user_message.id,
-            token_count=token_count,
-            finish_reason=finish_reason,
-        )
-
-        yield _sse({"event": "message_done", "data": {
-            "assistant_message_id": str(assistant_message.id),
-            "token_count": token_count,
-            "finish_reason": finish_reason,
-        }})
+        async for payload_ in ChatService.stream_reply(db, ctx, conversation, user_message):
+            yield _sse(payload_)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -292,7 +267,7 @@ async def send_message(
     Gửi user message vào conversation đã có, stream lại assistant reply.
     """
     try:
-        user_message = await ChatService.send_message(
+        conversation, user_message = await ChatService.send_message(
             db=db,
             conversation_id=conversation_id,
             user_id=current_user.id,
@@ -303,40 +278,14 @@ async def send_message(
     except (NotFoundException, ForbiddenException) as exc:
         _handle_service_error(exc)
 
-    # Lấy conversation để biết model_id
-    conversation = await ConversationService.get_by_id(
-        db, conversation_id, current_user.id
-    )
+    ctx = await ChatService.build_run_context(db, conversation, user_message, current_user.id)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _sse({"event": "user_message_saved", "data": {
             "user_message_id": str(user_message.id),
         }})
-
-        # ── Stream LLM (placeholder) ──────────────────────────────
-        full_content = ""
-        token_count = 0
-        finish_reason = "stop"
-
-        # async for chunk in llm_client.stream(...):
-        #     full_content += chunk.delta
-        #     yield _sse({"event": "delta", "data": {"content": chunk.delta}})
-
-        assistant_message = await ChatService.save_assistant_reply(
-            db=db,
-            conversation_id=conversation_id,
-            content=full_content,
-            model_id=conversation.model_id,
-            parent_message_id=user_message.id,
-            token_count=token_count,
-            finish_reason=finish_reason,
-        )
-
-        yield _sse({"event": "message_done", "data": {
-            "assistant_message_id": str(assistant_message.id),
-            "token_count": token_count,
-            "finish_reason": finish_reason,
-        }})
+        async for payload_ in ChatService.stream_reply(db, ctx, conversation, user_message):
+            yield _sse(payload_)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
