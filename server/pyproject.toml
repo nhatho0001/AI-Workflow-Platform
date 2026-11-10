@@ -14,5 +14,9 @@ dependencies = [
     "bcrypt>=4.0,<4.1",
     "python-multipart>=0.0.32",
     "alembic>=1.19.2",
+    "langgraph>=1.2.20",
+    "langchain-core>=1.7.6",
+    "langchain-openai>=1.7.4",
+    "langchain-anthropic>=1.7.10",
 ]
 
