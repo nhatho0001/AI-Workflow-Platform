@@ -112,6 +112,9 @@ export function useChatStream({ conversationId, onConversationCreated }: UseChat
           case "delta":
             setStreamingContent((prev) => prev + e.data.content);
             break;
+          case "error":
+            setError(e.data.message);
+            break;
         }
       };
 

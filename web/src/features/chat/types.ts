@@ -86,4 +86,18 @@ export type ChatStreamEvent =
   | {
       event: "message_done";
       data: { assistant_message_id: string; token_count: number; finish_reason: string };
+    }
+  // Lỗi từ AI Engine (thiếu API key, provider lỗi…) — phần đã stream (nếu có) vẫn được lưu
+  | { event: "error"; data: { code: string; message: string } }
+  // Ngữ cảnh (RAG, memory…) đã đưa vào prompt — dùng để hiển thị nguồn trích dẫn
+  | {
+      event: "context";
+      data: {
+        sources: Array<{
+          source: string;
+          title: string | null;
+          score: number | null;
+          metadata: Record<string, unknown>;
+        }>;
+      };
     };
