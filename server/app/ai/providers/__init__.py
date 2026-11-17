@@ -1,5 +1,5 @@
 """Tầng provider. Import các adapter ở đây để chúng tự đăng ký vào registry của factory."""
-from app.ai.providers import anthropic, ollama, openai, openrouter  # noqa: F401
+from app.ai.providers import anthropic, ollama, openai, openrouter , gemini  # noqa: F401
 from app.ai.providers.base import (
     AIEngineError,
     ModelConfig,

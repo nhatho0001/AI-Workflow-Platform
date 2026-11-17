@@ -18,5 +18,6 @@ dependencies = [
     "langchain-core>=1.7.6",
     "langchain-openai>=1.7.4",
     "langchain-anthropic>=1.7.10",
+    "langchain-google-genai>=4.4.3",
 ]
 

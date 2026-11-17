@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OLLAMA_API_KEY: str | None = None  # chỉ cần với Ollama Cloud
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"  # endpoint tương thích OpenAI của Ollama
+    GEMINI_API_KEY: str | None = None
+    GEMINI_BASE_URL: str = "https://gemini.api.cloud.yandex.net/v1"  # endpoint tương thích OpenAI của Gemini
     AI_REQUEST_TIMEOUT: float = 120.0  # giây
     AI_MAX_RETRIES: int = 2
 

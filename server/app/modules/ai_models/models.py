@@ -15,6 +15,7 @@ class AIModelProvider(str, Enum):
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
     OPENROUTER = "openrouter"
+    GEMINI = "gemini"
 
 
 class AIModel(Base):
