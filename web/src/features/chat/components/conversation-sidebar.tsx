@@ -40,7 +40,7 @@ export function ConversationSidebar({ activeId }: { activeId?: string }) {
           </div>
         )}
         {!isLoading && conversations.length === 0 && (
-          <p className="px-2 py-4 text-sm text-muted-foreground">Chưa có cuộc trò chuyện nào.</p>
+          <p className="text-muted-foreground px-2 py-4 text-sm">Chưa có cuộc trò chuyện nào.</p>
         )}
         <ul className="grid gap-0.5">
           {conversations.map((c) => (
@@ -49,18 +49,18 @@ export function ConversationSidebar({ activeId }: { activeId?: string }) {
                 to={`/chat/${c.id}`}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-2 truncate rounded-md px-2 py-2 pr-16 text-sm hover:bg-accent",
+                    "hover:bg-accent flex items-center gap-2 truncate rounded-md px-2 py-2 pr-16 text-sm",
                     isActive && "bg-accent font-medium",
                   )
                 }
               >
-                {c.is_pinned && <Pin className="size-3 shrink-0 text-muted-foreground" />}
+                {c.is_pinned && <Pin className="text-muted-foreground size-3 shrink-0" />}
                 <span className="truncate">{c.title || "Không tiêu đề"}</span>
               </NavLink>
               <div className="absolute top-1/2 right-1 hidden -translate-y-1/2 gap-0.5 group-focus-within:flex group-hover:flex">
                 <button
                   type="button"
-                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                  className="text-muted-foreground hover:bg-background hover:text-foreground rounded p-1"
                   aria-label={c.is_pinned ? "Bỏ ghim" : "Ghim"}
                   onClick={() => togglePin.mutate(c.id)}
                 >
@@ -68,7 +68,7 @@ export function ConversationSidebar({ activeId }: { activeId?: string }) {
                 </button>
                 <button
                   type="button"
-                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
+                  className="text-muted-foreground hover:bg-background hover:text-destructive rounded p-1"
                   aria-label="Xoá"
                   onClick={() => handleDelete(c)}
                 >

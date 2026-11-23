@@ -16,7 +16,7 @@ modules/chat_core  ──(conversation.model_id)──►  modules/ai_models  �
 
 - `chat_core.Conversation.model_id` và `Message.model_id` trỏ tới `ai_models.id`.
 - `ai_models` chuyển một bản ghi DB thành `ModelConfig` (dataclass/pydantic thuần) để AI Engine dùng — AI Engine **không** import SQLAlchemy model `AIModel`.
-- Frontend lấy danh sách model qua API của module này (thay cho biến `VITE_DEFAULT_MODEL_ID` đang hardcode).
+- Frontend lấy danh sách model qua API của module này (`web/src/features/ai-models`; chat dùng `useEnabledAIModels()`).
 
 ## 2. Cấu trúc file
 

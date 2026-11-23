@@ -9,15 +9,17 @@ interface ChatComposerProps {
   onSend: (content: string) => void;
   onStop: () => void;
   isStreaming: boolean;
+  /** Khoá gửi (vd: chưa có model AI khả dụng) — vẫn cho gõ trước */
+  disabled?: boolean;
 }
 
-export function ChatComposer({ onSend, onStop, isStreaming }: ChatComposerProps) {
+export function ChatComposer({ onSend, onStop, isStreaming, disabled }: ChatComposerProps) {
   const [value, setValue] = useState("");
   const trimmed = value.trim();
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (!trimmed || isStreaming) return;
+    if (!trimmed || isStreaming || disabled) return;
     onSend(trimmed);
     setValue("");
   };
@@ -43,7 +45,13 @@ export function ChatComposer({ onSend, onStop, isStreaming }: ChatComposerProps)
         aria-label="Tin nhắn"
       />
       {isStreaming ? (
-        <Button size="icon" variant="secondary" className="absolute right-3 bottom-3 rounded-full" onClick={onStop} aria-label="Dừng">
+        <Button
+          size="icon"
+          variant="secondary"
+          className="absolute right-3 bottom-3 rounded-full"
+          onClick={onStop}
+          aria-label="Dừng"
+        >
           <Square />
         </Button>
       ) : (
@@ -51,7 +59,7 @@ export function ChatComposer({ onSend, onStop, isStreaming }: ChatComposerProps)
           type="submit"
           size="icon"
           className="absolute right-3 bottom-3 rounded-full"
-          disabled={!trimmed}
+          disabled={!trimmed || disabled}
           aria-label="Gửi"
         >
           <ArrowUp />

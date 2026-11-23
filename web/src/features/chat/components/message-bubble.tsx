@@ -16,7 +16,7 @@ export function MessageBubble({ role, content, attachments, isStreaming }: Messa
   return (
     <div className={cn("flex gap-3", isUser && "justify-end")}>
       {!isUser && (
-        <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary">
+        <span className="bg-secondary mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full">
           <Bot className="size-4" />
         </span>
       )}
@@ -31,7 +31,9 @@ export function MessageBubble({ role, content, attachments, isStreaming }: Messa
             <Spinner className="text-muted-foreground" />
           ) : (
             // Backend hiện chưa nối LLM nên assistant message có content rỗng
-            <span className="text-muted-foreground italic">(Chưa có phản hồi — backend chưa kết nối LLM)</span>
+            <span className="text-muted-foreground italic">
+              (Chưa có phản hồi — backend chưa kết nối LLM)
+            </span>
           ))}
 
         {attachments && attachments.length > 0 && (
@@ -39,7 +41,12 @@ export function MessageBubble({ role, content, attachments, isStreaming }: Messa
             {attachments.map((a) => (
               <li key={a.id} className="flex items-center gap-1.5 text-xs opacity-80">
                 <Paperclip className="size-3" />
-                <a href={a.file_url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                <a
+                  href={a.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
                   {a.file_name}
                 </a>
               </li>

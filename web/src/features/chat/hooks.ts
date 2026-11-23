@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { env } from "@/config/env";
 import { getErrorMessage } from "@/lib/api-client";
 import { chatApi } from "./api";
-import type { ChatStreamEvent, ListConversationsParams } from "./types";
+import type { ChatStreamEvent, ConversationUpdate, ListConversationsParams } from "./types";
 
 export const chatKeys = {
   all: ["chat"] as const,
@@ -53,6 +52,15 @@ export function useRenameConversation() {
   });
 }
 
+export function useUpdateConversation() {
+  const invalidate = useInvalidateChat();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ConversationUpdate }) =>
+      chatApi.updateConversation(id, body),
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeleteConversation() {
   const invalidate = useInvalidateChat();
   return useMutation({ mutationFn: chatApi.deleteConversation, onSuccess: invalidate });
@@ -62,11 +70,13 @@ export function useDeleteConversation() {
 
 interface UseChatStreamOptions {
   conversationId?: string;
+  /** Model dùng khi tạo conversation mới (/chat/start). Conversation đã có thì server dùng model của nó. */
+  modelId?: string;
   /** Gọi khi /chat/start tạo xong conversation mới — dùng để điều hướng sang URL của nó */
   onConversationCreated?: (conversationId: string) => void;
 }
 
-export function useChatStream({ conversationId, onConversationCreated }: UseChatStreamOptions) {
+export function useChatStream({ conversationId, modelId, onConversationCreated }: UseChatStreamOptions) {
   const queryClient = useQueryClient();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -121,8 +131,10 @@ export function useChatStream({ conversationId, onConversationCreated }: UseChat
       try {
         if (conversationId) {
           await chatApi.sendMessage(conversationId, { content }, onEvent, controller.signal);
+        } else if (modelId) {
+          await chatApi.startChat({ model_id: modelId, message: content }, onEvent, controller.signal);
         } else {
-          await chatApi.startChat({ model_id: env.defaultModelId, message: content }, onEvent, controller.signal);
+          setError("Chưa chọn model AI");
         }
       } catch (err) {
         if (!controller.signal.aborted) setError(getErrorMessage(err));
@@ -139,7 +151,7 @@ export function useChatStream({ conversationId, onConversationCreated }: UseChat
         }
       }
     },
-    [conversationId, onConversationCreated, queryClient],
+    [conversationId, modelId, onConversationCreated, queryClient],
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);

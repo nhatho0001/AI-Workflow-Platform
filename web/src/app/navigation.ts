@@ -1,4 +1,4 @@
-import { MessageSquare, Users, type LucideIcon } from "lucide-react";
+import { Bot, MessageSquare, Users, type LucideIcon } from "lucide-react";
 import type { Role } from "@/features/users";
 
 export interface NavItem {
@@ -13,4 +13,5 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/admin/users", label: "Người dùng", icon: Users, roles: ["admin"] },
+  { to: "/admin/ai-models", label: "AI models", icon: Bot, roles: ["admin"] },
 ];

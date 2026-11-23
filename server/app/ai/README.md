@@ -40,7 +40,7 @@ ChatService.stream_reply  ◄──AsyncIterator[AIEvent]──┘
 1. **`app.ai` không import `app.modules.*`.** Dữ liệu đi vào qua `RunContext`/`ModelConfig` (kiểu thuần). Chiều ngược lại thì được (`ai_models` import `ModelConfig`).
 2. **Merge tham số model chỉ ở `ai_models.services.to_model_config()`** (request > conversation > `default_params`).
 3. **API key chỉ nằm trong `Settings`** (`.env`), không lưu DB. Key để trống = provider tắt; chỉ báo lỗi (`provider_not_configured`) khi có model dùng provider đó được gọi.
-4. **Runner/ContextSource cứ raise khi lỗi**: `AIService` chuyển thành `RunFailed`, `ContextBuilder` log và bỏ qua source lỗi. Không nuốt lỗi bên trong.
+4. **Runner/ContextSource cứ raise khi lỗi**: `AIService` chuyển thành `RunFailed`, `ContextBuilder` log và bỏ qua source lỗi. Không nuốt lỗi bên trong. Lỗi SDK provider được `providers/base.py:classify_provider_error` đọc mã HTTP (cả lỗi gốc trong `__cause__`) để ra `code` rõ ràng: `model_overloaded` (503/529), `rate_limited` (429), `provider_auth_error` (401/403, 400 "API key"), `model_not_found` (404), `provider_timeout`; không nhận diện được thì `provider_error`.
 5. **Mọi runner kết thúc bằng đúng 1 `RunCompleted`** khi thành công — `chat_core` dựa vào đó để lưu DB.
 6. Mọi thứ phải test được **không cần mạng**: `ChatRunner(model_factory=...)` nhận fake model.
 

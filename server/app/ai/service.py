@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator, Mapping
 
 from app.ai.context import ContextBuilder, RunContext
 from app.ai.events import AIEvent, ContextRetrieved, RunCompleted, RunFailed, TextDelta
-from app.ai.providers.base import AIEngineError
+from app.ai.providers.base import AIEngineError, classify_provider_error
 from app.ai.runners import ChatRunner, Runner
 from app.core.config import settings
 
@@ -62,11 +62,12 @@ class AIService:
             # Lỗi từ SDK provider (sai key, rate limit, timeout…) — log đầy đủ, trả message gọn cho user
             logger.exception("AI run failed (provider=%s, model=%s)", ctx.model.provider, ctx.model.model_name)
             detail = f": {exc}" if settings.DEBUG else ""
-            yield RunFailed(
-                message=f"Không thể nhận phản hồi từ model AI ({type(exc).__name__}){detail}",
-                code="provider_error",
-                partial_content="".join(partial),
+            # Nhận diện được (quá tải, hết quota, sai key…) thì báo rõ để user biết nên thử lại hay đổi model
+            code, message = classify_provider_error(exc) or (
+                "provider_error",
+                f"Không thể nhận phản hồi từ model AI ({type(exc).__name__})",
             )
+            yield RunFailed(message=f"{message}{detail}", code=code, partial_content="".join(partial))
 
     def _get_runner(self, name: str) -> Runner:
         try:

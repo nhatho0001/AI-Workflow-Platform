@@ -62,18 +62,18 @@ Patterns to reuse:
 
 ## Frontend architecture (`web/src/`)
 
-React 19 + Vite + TypeScript, organized by feature (`features/auth`, `features/chat`, `features/users`). Each feature has its own `api.ts`, `hooks.ts` (React Query), `pages/` and `components/`.
+React 19 + Vite + TypeScript, organized by feature (`features/auth`, `features/chat`, `features/users`, `features/ai-models`). Each feature has its own `api.ts`, `hooks.ts` (React Query), `pages/` and `components/`.
 
 - **Auth state**: `features/auth/store.ts` is a zustand store whose `isAuthenticated` comes from `lib/token-storage.ts` (localStorage, pub/sub). Read `useAuthStore` rather than re-deriving auth state.
 - **HTTP**: `lib/api-client.ts` is an axios instance that attaches the Bearer token. On a 401 it runs a single in-flight `POST /auth/refresh` and retries the original request once.
 - **Streaming**: use `lib/sse.ts:streamSSE` (as `features/chat/api.ts` does) for any streaming endpoint. Don't add one-off `EventSource`/`fetch` code.
-- **Routing**: `app/router.tsx` with the guards in `app/routes/guards.tsx` (`GuestRoute`, `ProtectedRoute`, `RequireRole(["admin"])` for `/admin/users`). Chat is lazy-loaded.
+- **Routing**: `app/router.tsx` with the guards in `app/routes/guards.tsx` (`GuestRoute`, `ProtectedRoute`, `RequireRole(["admin"])` for `/admin/users` and `/admin/ai-models`). Chat and the AI-model admin page are lazy-loaded.
+- **Model selection**: chat reads enabled models via `features/ai-models:useEnabledAIModels` (`GET /ai-models`). A new chat uses the picked model (falling back to the `is_default` one); an existing conversation always uses `conversation.model_id`, and changing it PATCHes the conversation.
 - `config/env.ts` is the single place that reads `import.meta.env`.
 
 ## Known gaps and rough edges
 
-- **The frontend doesn't use `/ai-models` yet.** It still sends a hardcoded `VITE_DEFAULT_MODEL_ID` as the `model_id` when creating conversations.
-- **`model_id` has no FK.** `Conversation.model_id` and `Message.model_id` are plain UUID columns. `chat_core` validates them through `ai_models.services.get_enabled_or_404` on create/update/send, so the hardcoded `VITE_DEFAULT_MODEL_ID` must be an existing enabled model, or chat returns 404.
+- **`model_id` has no FK.** `Conversation.model_id` and `Message.model_id` are plain UUID columns. `chat_core` validates them through `ai_models.services.get_enabled_or_404` on create/update/send, so a conversation whose model was disabled returns 404 until it is switched to another model (the chat header's model picker PATCHes `model_id`).
 - **CORS isn't wired up.** The `CORS_ORIGINS` setting exists, but `main.py` never adds `CORSMiddleware`. The Vite dev proxy and the nginx proxy are what make the browser side work.
 - **Role checks compare strings** (`current_user.role != "admin"`). That works because `Role`/`Status` are `str` enums. Note that the `users` enums are stored by member *name* in Postgres, while `ai_model_provider` stores *values* via `values_callable`.
 - `modules/auth/dependencies.py` is an empty file.

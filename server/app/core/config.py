@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     GEMINI_BASE_URL: str = "https://gemini.api.cloud.yandex.net/v1"  # endpoint tương thích OpenAI của Gemini
     AI_REQUEST_TIMEOUT: float = 120.0  # giây
-    AI_MAX_RETRIES: int = 2
+    # Thử lại khi lỗi tạm thời (429/5xx). Lưu ý: Gemini hiểu đây là TỔNG số lần gọi (HttpRetryOptions.attempts),
+    # OpenAI/Anthropic hiểu là số lần THỬ LẠI. Free tier Gemini hay bị 503 "high demand" nên để >= 4.
+    AI_MAX_RETRIES: int = 4
 
     # CORS settings
     CORS_ORIGINS: List[str] = ["*"]  # Allow all origins by default

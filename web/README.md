@@ -25,8 +25,7 @@ docker compose --env-file server/.env up -d --build
 
 Image được build 2 stage (`web/Dockerfile`): Node build ra `dist/`, sau đó nginx phục vụ (`web/nginx.conf`). Vì nginx proxy `/api` nên frontend và API cùng origin, không cần CORS. SSE chat đã được tắt buffer.
 
-Biến `VITE_*` được nhúng vào bundle **lúc build**: đổi giá trị thì phải `--build` lại. `VITE_DEFAULT_MODEL_ID` lấy từ biến môi trường cùng tên khi chạy compose.
-
+Biến `VITE_*` được nhúng vào bundle **lúc build**: đổi giá trị thì phải `--build` lại.
 Container chạy bản production và không có hot reload. Khi code UI, nên chạy `npm run dev` ở máy (vẫn dùng backend trong Docker ở cổng 8000).
 
 | Lệnh | Mô tả |
@@ -87,6 +86,6 @@ Gợi ý thư viện cho roadmap: `@xyflow/react` (workflow editor kéo-thả), 
 
 - **Auth**: token nằm trong body response và được lưu ở `localStorage`. Khi gặp 401, `api-client` tự gọi `/auth/refresh` (mỗi lần chỉ chạy một request refresh) rồi gửi lại request cũ. Nếu refresh thất bại thì đăng xuất.
 - **Chat streaming**: `/chat/start` và `/chat/conversations/{id}/messages` là POST trả SSE, nên `lib/sse.ts` đọc stream bằng `fetch` (vì `EventSource` không gửi được POST hay header `Authorization`).
-- **`model_id`**: backend bắt buộc trường này nhưng chưa có API danh sách model, nên tạm lấy từ `VITE_DEFAULT_MODEL_ID`.
+- **`model_id`**: chat lấy danh sách model đang bật từ `GET /ai-models` (feature `ai-models`). Cuộc trò chuyện mới dùng model user chọn (mặc định: model `is_default`); đổi model ở cuộc trò chuyện cũ thì `PATCH` conversation. Admin quản lý danh mục model ở `/admin/ai-models`.
 - **LLM chưa được nối**: assistant message hiện có content rỗng, giao diện hiển thị ghi chú thay vì để trống.
 - **Production**: backend chưa bật `CORSMiddleware`. Khi deploy hãy phục vụ frontend và API cùng domain (reverse proxy `/api` → FastAPI), hoặc bật CORS ở backend.

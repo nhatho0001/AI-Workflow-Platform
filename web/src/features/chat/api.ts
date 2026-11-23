@@ -21,7 +21,8 @@ export const chatApi = {
   updateConversation: (id: string, body: ConversationUpdate) =>
     apiClient.patch<Conversation>(`/chat/conversations/${id}`, body).then((r) => r.data),
 
-  togglePin: (id: string) => apiClient.post<Conversation>(`/chat/conversations/${id}/pin`).then((r) => r.data),
+  togglePin: (id: string) =>
+    apiClient.post<Conversation>(`/chat/conversations/${id}/pin`).then((r) => r.data),
 
   toggleArchive: (id: string) =>
     apiClient.post<Conversation>(`/chat/conversations/${id}/archive`).then((r) => r.data),

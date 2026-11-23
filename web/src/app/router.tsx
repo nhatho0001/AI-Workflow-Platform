@@ -40,7 +40,13 @@ export const router = createBrowserRouter([
               { path: "/profile", element: <ProfilePage /> },
               {
                 element: <RequireRole roles={["admin"]} />,
-                children: [{ path: "/admin/users", element: <UsersPage /> }],
+                children: [
+                  { path: "/admin/users", element: <UsersPage /> },
+                  {
+                    path: "/admin/ai-models",
+                    lazy: () => import("@/features/ai-models").then((m) => ({ Component: m.AIModelsPage })),
+                  },
+                ],
               },
             ],
           },

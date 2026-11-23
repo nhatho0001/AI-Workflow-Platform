@@ -60,7 +60,10 @@ export interface ListConversationsParams {
 }
 
 export type ConversationUpdate = Partial<
-  Pick<Conversation, "title" | "system_prompt" | "temperature" | "folder_id" | "is_archived" | "is_pinned" | "model_id">
+  Pick<
+    Conversation,
+    "title" | "system_prompt" | "temperature" | "folder_id" | "is_archived" | "is_pinned" | "model_id"
+  >
 >;
 
 export interface ChatStartRequest {
