@@ -552,13 +552,13 @@ class ChatService:
                     content=event.content,
                     model_id=conversation.model_id,
                     parent_message_id=user_message.id,
-                    token_count=event.usage.output_tokens,
+                    token_count=event.usage.total_tokens,
                     finish_reason=event.finish_reason,
                     metadata={"usage": event.usage.to_dict(), **event.metadata},
                 )
                 yield {"event": "message_done", "data": {
                     "assistant_message_id": str(assistant_message.id),
-                    "token_count": event.usage.output_tokens,
+                    "token_count": event.usage.total_tokens,
                     "finish_reason": event.finish_reason,
                 }}
             elif isinstance(event, RunFailed):
