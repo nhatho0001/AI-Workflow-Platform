@@ -1,5 +1,5 @@
 from app.core.database import Base
-from sqlalchemy import ForeignKey, String, Text, func, UniqueConstraint, text
+from sqlalchemy import ForeignKey, Integer, String, Text, func, UniqueConstraint, text , DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
@@ -38,8 +38,8 @@ class KnowledgeBase(Base):
     chunk_size: Mapped[int] = mapped_column(nullable=False, default=1000)
     chunk_overlap: Mapped[int] = mapped_column(nullable=False, default=200)
     is_enabled: Mapped[bool] = mapped_column(nullable=False, default=True, server_default=text("true"))
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_knowledge_bases_name"),
@@ -53,7 +53,7 @@ class KnowledgeBaseGrants(Base):
     subject_type: Mapped[SubjectType] = mapped_column(SAEnum(SubjectType), nullable=False)
     subject_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint("kb_id", "subject_type", "subject_id", name="uq_knowledge_base_grants_kb_id_subject_type_subject_id"),
@@ -71,8 +71,8 @@ class Documents(Base):
     token_count: Mapped[int] = mapped_column(nullable=False, default=0)
     status: Mapped[Status] = mapped_column(SAEnum(Status), nullable=False, default=Status.Pending)
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("knowledge_base_id", "file_name", name="uq_documents_knowledge_base_id_file_name"),
@@ -88,8 +88,8 @@ class DocumentChunks(Base):
     chunk_index: Mapped[int] = mapped_column(nullable=False)
     page: Mapped[int | None] = mapped_column(nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    token_count: Mapped[int] = mapped_column(nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime,nullable=False, server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint("document_id", "chunk_index", name="uq_document_chunks_document_id_chunk_index"),
@@ -101,4 +101,4 @@ class ConversationKnowledgeBases(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
     kb_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
