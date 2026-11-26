@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field
 
 class GroupBase(BaseModel):
     name: str = Field(..., description="The name of the group")
-    code: str = Field(..., description="The unique code of the group")
     description: str | None = Field(None, description="The description of the group")
 
 class GroupMemberBase(BaseModel):
@@ -11,8 +10,14 @@ class GroupMemberBase(BaseModel):
     user_id: str = Field(..., description="The ID of the user")
     role: str = Field(..., description="The role of the user in the group")
 
+class GroupCreateResponse(GroupBase):
+    id: str = Field(..., description="The ID of the group")
+    create_at: str = Field(..., description="The creation timestamp of the group")
+    update_at: str = Field(..., description="The last update timestamp of the group")
+
+
 class GroupCreate(GroupBase):
-    pass
+    code: str = Field(..., description="The unique code of the group")
 
 class GroupUpdate(GroupBase):
     pass
