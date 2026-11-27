@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from app.modules.groups.services import group_service, group_member_service, get_user_group_ids, get_is_manager
-from app.modules.groups.schemas import GroupCreate, GroupUpdate, GroupMemberBase , GroupCreateResponse
+from app.modules.groups.schemas import GroupCreate, GroupUpdate, GroupMemberBase , GroupCreateResponse , GroupMemberOut
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.groups.models import Group, GroupMember
 from app.core.dependencies import CurrentUser, AdminUser , DBSession
@@ -42,3 +42,8 @@ async def delete_group(group_id: int, db: DBSession , admin_user: AdminUser):
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     await group_service.remove(db, id=group_id)
+
+@router.get("/me", summary="Get groups for current user", response_model=list[GroupMemberOut])
+async def get_group_me(db: DBSession , current_user: CurrentUser):
+    groups  =  await get_user_group_ids(db , current_user.id)
+    return groups
